@@ -1,0 +1,6 @@
+{
+  "name": "FamillePlanning",
+  "description": "Application Android native et compagnon visuel pour l'organisation et le planning partagé de la famille.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

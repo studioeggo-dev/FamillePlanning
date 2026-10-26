@@ -1,0 +1,16 @@
+<resources>
+    <!-- FamillePlanning Palette Chaleureuse & Colorée -->
+    <color name="primary_coral">#FF6B6B</color>
+    <color name="primary_coral_dark">#EE5253</color>
+    <color name="secondary_sky">#48DBFB</color>
+    <color name="accent_mint">#1DD1A1</color>
+    <color name="accent_amber">#FECA57</color>
+    <color name="accent_lilac">#A55EEA</color>
+    <color name="accent_peach">#FF9F43</color>
+
+    <color name="background_soft">#FDFBF7</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="text_primary">#2D3436</color>
+    <color name="text_secondary">#636E72</color>
+    <color name="border_soft">#EDE8DF</color>
+</resources>

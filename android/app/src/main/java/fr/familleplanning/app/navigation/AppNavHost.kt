@@ -1,0 +1,148 @@
+package fr.familleplanning.app.navigation
+
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import fr.familleplanning.app.ui.components.AppBottomBar
+import fr.familleplanning.app.ui.screens.FamilyScreen
+import fr.familleplanning.app.ui.screens.PlanningScreen
+import fr.familleplanning.app.ui.screens.SettingsScreen
+import fr.familleplanning.app.ui.screens.WelcomeScreen
+import fr.familleplanning.app.viewmodel.AuthUiState
+import fr.familleplanning.app.viewmodel.AuthViewModel
+import fr.familleplanning.app.viewmodel.FamilyUiState
+import fr.familleplanning.app.viewmodel.FamilyViewModel
+import fr.familleplanning.app.viewmodel.PlanningViewModel
+import fr.familleplanning.app.viewmodel.SettingsViewModel
+
+@Composable
+fun AppNavHost(
+    modifier: Modifier = Modifier,
+    navController: NavHostController = rememberNavController(),
+    authViewModel: AuthViewModel = viewModel(),
+    planningViewModel: PlanningViewModel = viewModel(),
+    familyViewModel: FamilyViewModel = viewModel(),
+    settingsViewModel: SettingsViewModel = viewModel(),
+    onTriggerGoogleSignIn: () -> Unit = {}
+) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Welcome.route
+
+    val authState by authViewModel.uiState.collectAsState()
+    val planningState by planningViewModel.uiState.collectAsState()
+    val familyState by familyViewModel.uiState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsState()
+
+    // Activation automatique de la synchronisation Firestore lors de l'authentification
+    val activeFamilyId = (authState as? AuthUiState.Authenticated)?.profile?.activeFamilyId
+    LaunchedEffect(activeFamilyId) {
+        planningViewModel.setActiveFamily(activeFamilyId)
+        familyViewModel.loadFamilyData(activeFamilyId)
+    }
+
+    val familyName = when (familyState) {
+        is FamilyUiState.Success -> (familyState as FamilyUiState.Success).family.name
+        else -> "Famille Martin"
+    }
+
+    val members = when (familyState) {
+        is FamilyUiState.Success -> (familyState as FamilyUiState.Success).members
+        else -> emptyList()
+    }
+
+    val showBottomBar = currentRoute != Screen.Welcome.route
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        bottomBar = {
+            if (showBottomBar) {
+                AppBottomBar(
+                    currentRoute = currentRoute,
+                    onNavigate = { screen ->
+                        navController.navigate(screen.route) {
+                            popUpTo(Screen.Planning.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Welcome.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            // Écran 1: Bienvenue
+            composable(Screen.Welcome.route) {
+                WelcomeScreen(
+                    uiState = authState,
+                    onSignInWithGoogleClick = onTriggerGoogleSignIn,
+                    onContinueToAppClick = {
+                        navController.navigate(Screen.Planning.route) {
+                            popUpTo(Screen.Welcome.route) { inclusive = true }
+                        }
+                    },
+                    onDismissError = { authViewModel.dismissError() }
+                )
+            }
+
+            // Écran 2: Planning (avec synchronisation Firestore temps réel et CRUD)
+            composable(Screen.Planning.route) {
+                PlanningScreen(
+                    uiState = planningState,
+                    members = members,
+                    familyName = familyName,
+                    onPreviousDateClick = { planningViewModel.goToPrevious() },
+                    onNextDateClick = { planningViewModel.goToNext() },
+                    onTodayClick = { planningViewModel.goToToday() },
+                    onDateSelected = { planningViewModel.selectDate(it) },
+                    onViewModeChange = { planningViewModel.setViewMode(it) },
+                    onParticipantToggle = { planningViewModel.toggleParticipantFilter(it) },
+                    onCreateEvent = { planningViewModel.createEvent(it) },
+                    onUpdateEvent = { planningViewModel.updateEvent(it) },
+                    onDeleteEvent = { planningViewModel.deleteEvent(it) }
+                )
+            }
+
+            // Écran 3: Ma famille
+            composable(Screen.Family.route) {
+                FamilyScreen(
+                    uiState = familyState,
+                    onRefreshClick = {
+                        familyViewModel.loadFamilyData(activeFamilyId)
+                    }
+                )
+            }
+
+            // Écran 4: Paramètres
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    uiState = settingsState,
+                    onSignOutClick = {
+                        planningViewModel.stopSync()
+                        authViewModel.signOut()
+                        navController.navigate(Screen.Welcome.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onToggleDefaultViewMode = { mode ->
+                        settingsViewModel.setDefaultViewMode(mode)
+                    }
+                )
+            }
+        }
+    }
+}

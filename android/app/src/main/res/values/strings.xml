@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">FamillePlanning</string>
+    <string name="welcome_title">Le planning joyeux et partagé de toute la famille</string>
+    <string name="welcome_subtitle">Retrouvez tous les rendez-vous, cours et sorties de chacun au même endroit, en toute simplicité.</string>
+    <string name="btn_google_signin">Continuer avec Google</string>
+    <string name="nav_planning">Planning</string>
+    <string name="nav_family">Ma famille</string>
+    <string name="nav_settings">Paramètres</string>
+    <string name="view_week">Semaine</string>
+    <string name="view_month">Mois</string>
+    <string name="add_event">Ajouter</string>
+    <string name="sign_out">Déconnexion</string>
+</resources>
