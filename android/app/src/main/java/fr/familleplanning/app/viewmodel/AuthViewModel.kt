@@ -48,6 +48,18 @@ class AuthViewModel(
         }
     }
 
+    fun beginGoogleSignIn() {
+        _uiState.value = AuthUiState.Loading
+    }
+
+    fun cancelGoogleSignIn() {
+        _uiState.value = AuthUiState.Idle
+    }
+
+    fun reportGoogleSignInError(message: String) {
+        _uiState.value = AuthUiState.Error(message)
+    }
+
     fun signInWithGoogle(credential: AuthCredential) {
         _uiState.value = AuthUiState.Loading
         viewModelScope.launch {

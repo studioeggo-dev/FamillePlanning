@@ -155,13 +155,38 @@ fun WelcomeScreen(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "Continuer avec Google",
+                                    text = "Créer mon compte avec Google",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = onSignInWithGoogleClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text(
+                                text = "J'ai déjà un compte : me connecter",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Pour les deux options, choisissez votre compte Google. Un compte FamillePlanning est créé automatiquement lors de la première connexion.",
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            color = TextSecondary
+                        )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -225,6 +250,16 @@ fun WelcomeScreen(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = TextPrimary
+                                )
+                            }
+
+                            if (uiState.profile == null || uiState.profile.activeFamilyId.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Votre compte Google est connecté. Aucun foyer n'est encore associé : vous pouvez le créer depuis FamillePlanning Web, puis revenir sur Android.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = TextSecondary
                                 )
                             }
 

@@ -1,6 +1,8 @@
 package fr.familleplanning.app
 
 import android.os.Bundle
+import android.app.Activity
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,20 +23,34 @@ class MainActivity : ComponentActivity() {
 
     private val authViewModel: AuthViewModel by viewModels()
 
-    // Enregistrement du résultat du flux Google Sign-In
     private val googleSignInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
-            val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            if (idToken != null) {
-                val credential = GoogleAuthProvider.getCredential(idToken, null)
-                authViewModel.signInWithGoogle(credential)
+            val account = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                .getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken.isNullOrBlank()) {
+                authViewModel.reportGoogleSignInError(
+                    "Google n'a pas transmis les informations de connexion. Vérifiez la configuration de votre compte."
+                )
+            } else {
+                authViewModel.signInWithGoogle(GoogleAuthProvider.getCredential(idToken, null))
+            }
+        } catch (e: ApiException) {
+            Log.e("FamillePlanningAuth", "Google Sign-In status code: ${e.statusCode}", e)
+            if (e.statusCode == 12501 && result.resultCode == Activity.RESULT_CANCELED) {
+                authViewModel.cancelGoogleSignIn()
+            } else {
+                authViewModel.reportGoogleSignInError(
+                    "Connexion Google impossible (code ${e.statusCode}). Vérifiez la configuration de l'application."
+                )
             }
         } catch (e: Exception) {
-            // L'erreur est prise en charge par AuthViewModel
+            Log.e("FamillePlanningAuth", "Google Sign-In unexpected error", e)
+            authViewModel.reportGoogleSignInError(
+                "Impossible de terminer la connexion Google. Réessayez."
+            )
         }
     }
 
@@ -53,13 +69,37 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchGoogleSignIn() {
-        // Configuration Google Sign-In avec web client id de Firebase
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("763272373321-familleplanning-web.apps.googleusercontent.com")
-            .requestEmail()
-            .build()
-
-        val googleSignInClient = GoogleSignIn.getClient(this, gso)
-        googleSignInLauncher.launch(googleSignInClient.signInIntent)
+        // The Google Services Gradle plugin generates this resource from the
+        // real OAuth Web client (client_type = 3) in google-services.json.
+        val clientResId = resources.getIdentifier(
+            "default_web_client_id", "string", packageName
+        )
+        if (clientResId == 0) {
+            authViewModel.reportGoogleSignInError(
+                "La connexion Google n'est pas encore configurée pour cette application."
+            )
+            return
+        }
+        val webClientId = getString(clientResId)
+        if (webClientId.isBlank()) {
+            authViewModel.reportGoogleSignInError(
+                "La configuration de connexion Google est incomplète."
+            )
+            return
+        }
+        authViewModel.beginGoogleSignIn()
+        try {
+            val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(webClientId)
+                .requestEmail()
+                .build()
+            val client = GoogleSignIn.getClient(this, options)
+            googleSignInLauncher.launch(client.signInIntent)
+        } catch (e: Exception) {
+            Log.e("FamillePlanningAuth", "Unable to launch Google Sign-In", e)
+            authViewModel.reportGoogleSignInError(
+                "Impossible d'ouvrir la connexion Google sur ce téléphone."
+            )
+        }
     }
 }

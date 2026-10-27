@@ -61,6 +61,31 @@ jobs:
           assert any(client.get("client_info", {}).get("android_client_info", {}).get("package_name") == "fr.familleplanning.app" for client in data.get("client", []))
           print("Firebase Android configuration verified")
           PY
+      - name: Restore test-only Android signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: familleplanning-android-debug-key-v1
+      - name: Prepare stable debug signing and display SHA fingerprints
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=FamillePlanning,C=FR" -noprompt
+          fi
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android | grep -E 'SHA1:|SHA256:'
+      - name: Check Google OAuth client configuration
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("android/app/google-services.json") as fp:
+              cfg = json.load(fp)
+          oauth_types = sorted(set(client.get("client_type") for app in cfg.get("client", []) for client in app.get("oauth_client", [])))
+          print("OAuth client types in Firebase config:", oauth_types)
+          if 3 not in oauth_types:
+              print("WARNING: Missing OAuth WEB client (type 3). Google sign-in will not work until Firebase OAuth is configured and google-services.json refreshed.")
+          PY
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
       - name: Build debug APK
