@@ -16,6 +16,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fr.familleplanning.app.ui.components.AppBottomBar
 import fr.familleplanning.app.ui.screens.FamilyScreen
+import fr.familleplanning.app.ui.screens.FamilySetupScreen
 import fr.familleplanning.app.ui.screens.PlanningScreen
 import fr.familleplanning.app.ui.screens.SettingsScreen
 import fr.familleplanning.app.ui.screens.WelcomeScreen
@@ -43,17 +44,43 @@ fun AppNavHost(
     val planningState by planningViewModel.uiState.collectAsState()
     val familyState by familyViewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
+    val familyCreationState by authViewModel.familyCreationState.collectAsState()
 
-    // Activation automatique de la synchronisation Firestore lors de l'authentification
-    val activeFamilyId = (authState as? AuthUiState.Authenticated)?.profile?.activeFamilyId
-    LaunchedEffect(activeFamilyId) {
-        planningViewModel.setActiveFamily(activeFamilyId)
-        familyViewModel.loadFamilyData(activeFamilyId)
+    val authenticated = authState as? AuthUiState.Authenticated
+    val activeFamilyId = authenticated?.profile?.activeFamilyId
+
+    // Aucune démo implicite : on ne charge des données fictives qu'après choix explicite.
+    LaunchedEffect(authenticated?.firebaseUser?.uid, activeFamilyId) {
+        if (authenticated != null) {
+            planningViewModel.setActiveFamily(activeFamilyId)
+            familyViewModel.loadFamilyData(activeFamilyId)
+        } else {
+            planningViewModel.stopSync()
+            familyViewModel.loadFamilyData(null)
+        }
+    }
+
+    LaunchedEffect(authenticated?.firebaseUser?.uid, activeFamilyId, currentRoute) {
+        if (!activeFamilyId.isNullOrBlank() && currentRoute == Screen.FamilySetup.route) {
+            navController.navigate(Screen.Planning.route) {
+                popUpTo(Screen.FamilySetup.route) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
     }
 
     val familyName = when (familyState) {
         is FamilyUiState.Success -> (familyState as FamilyUiState.Success).family.name
-        else -> "Famille Martin"
+        else -> "Ma famille"
+    }
+
+    LaunchedEffect(authenticated?.firebaseUser?.uid, activeFamilyId, familyName) {
+        settingsViewModel.updateUserInfo(
+            authenticated?.firebaseUser?.email,
+            authenticated?.firebaseUser?.displayName,
+            if (!activeFamilyId.isNullOrBlank()) familyName else "Aucun foyer associé",
+            activeFamilyId
+        )
     }
 
     val members = when (familyState) {
@@ -61,7 +88,7 @@ fun AppNavHost(
         else -> emptyList()
     }
 
-    val showBottomBar = currentRoute != Screen.Welcome.route
+    val showBottomBar = currentRoute != Screen.Welcome.route && currentRoute != Screen.FamilySetup.route
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -91,11 +118,43 @@ fun AppNavHost(
                     uiState = authState,
                     onSignInWithGoogleClick = onTriggerGoogleSignIn,
                     onContinueToAppClick = {
-                        navController.navigate(Screen.Planning.route) {
+                        val destination = when {
+                            authenticated == null -> {
+                                planningViewModel.setActiveFamily("local_demo")
+                                familyViewModel.loadDemoFamily()
+                                Screen.Planning
+                            }
+                            activeFamilyId.isNullOrBlank() -> Screen.FamilySetup
+                            else -> Screen.Planning
+                        }
+                        navController.navigate(destination.route) {
                             popUpTo(Screen.Welcome.route) { inclusive = true }
                         }
                     },
                     onDismissError = { authViewModel.dismissError() }
+                )
+            }
+
+            // Création réelle du premier foyer, jamais une démo automatique.
+            composable(Screen.FamilySetup.route) {
+                FamilySetupScreen(
+                    creationState = familyCreationState,
+                    onCreateFamily = { name, firstName, color ->
+                        authViewModel.createFamily(name, firstName, color)
+                    },
+                    onRefreshProfile = { authViewModel.refreshProfile() },
+                    onExploreDemo = {
+                        planningViewModel.setActiveFamily("local_demo")
+                        familyViewModel.loadDemoFamily()
+                        navController.navigate(Screen.Planning.route)
+                    },
+                    onSignOut = {
+                        planningViewModel.stopSync()
+                        authViewModel.signOut()
+                        navController.navigate(Screen.Welcome.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 )
             }
 

@@ -256,7 +256,7 @@ fun WelcomeScreen(
                             if (uiState.profile == null || uiState.profile.activeFamilyId.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Votre compte Google est connecté. Aucun foyer n'est encore associé : vous pouvez le créer depuis FamillePlanning Web, puis revenir sur Android.",
+                                    text = "Votre compte Google est connecté. Créez votre famille pour commencer votre véritable planning partagé.",
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Center,
                                     color = TextSecondary
@@ -274,7 +274,7 @@ fun WelcomeScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = CoralPrimary)
                             ) {
                                 Text(
-                                    text = "Accéder à mon planning",
+                                    text = if (uiState.profile?.activeFamilyId.isNullOrBlank()) "Créer ma famille" else "Accéder à mon planning",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White

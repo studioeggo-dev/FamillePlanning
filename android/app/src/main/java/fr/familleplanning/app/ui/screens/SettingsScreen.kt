@@ -102,14 +102,14 @@ fun SettingsScreen(
                 item {
                     SettingsCard(title = "Compte utilisateur", icon = Icons.Rounded.AccountCircle) {
                         Text(
-                            text = uiState.userName ?: "Compte familial",
+                            text = uiState.userName ?: "Compte non connecté",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = uiState.userEmail ?: "studio.eggo.nantes@gmail.com",
+                            text = uiState.userEmail ?: "Non connecté",
                             fontSize = 13.sp,
                             color = TextSecondary
                         )

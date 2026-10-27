@@ -98,6 +98,35 @@ fun FamilyScreen(
 
             // Corps de l'écran selon l'état de chargement
             when (uiState) {
+                is FamilyUiState.NoFamily -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Aucune famille associée",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Ton compte est connecté, mais aucun foyer réel n'est associé. La famille de démonstration n'est pas ton calendrier.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(onClick = onRefreshClick) {
+                                Text("Actualiser")
+                            }
+                        }
+                    }
+                }
+
                 is FamilyUiState.Loading -> {
                     Box(
                         modifier = Modifier

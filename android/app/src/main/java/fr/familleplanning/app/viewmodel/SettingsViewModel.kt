@@ -10,12 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 data class SettingsUiState(
     val userEmail: String? = null,
     val userName: String? = null,
-    val activeFamilyName: String = "Famille Martin",
-    val activeFamilyId: String = "ai-studio-familleplanning",
+    val activeFamilyName: String = "Aucun foyer associé",
+    val activeFamilyId: String? = null,
     val defaultViewMode: PlanningViewMode = PlanningViewMode.WEEK,
     val firstDayOfWeek: String = "Lundi",
     val timezone: String = "Europe/Paris",
-    val appVersion: String = "1.0.0 (Phase 3A)",
+    val appVersion: String = "1.0.1 (Foyer familial)",
     val firebaseProjectId: String = FirebaseManager.PROJECT_ID,
     val firebaseDatabaseId: String = FirebaseManager.DATABASE_ID
 )
@@ -29,8 +29,8 @@ class SettingsViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             userEmail = email,
             userName = name,
-            activeFamilyName = familyName ?: _uiState.value.activeFamilyName,
-            activeFamilyId = familyId ?: _uiState.value.activeFamilyId
+            activeFamilyName = familyName ?: "Aucun foyer associé",
+            activeFamilyId = familyId
         )
     }
 
