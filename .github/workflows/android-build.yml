@@ -45,6 +45,38 @@ jobs:
           fi
           echo "Using: $SDKMANAGER"
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore Android Firebase configuration from AI Studio archive
+        working-directory: .
+        run: |
+          set -euo pipefail
+          ARCHIVE="FamillePlanning-Android.zip"
+          if [ -f android/app/google-services.json ]; then
+            echo "Firebase configuration already present."
+            exit 0
+          fi
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "::error::Archive $ARCHIVE absente et android/app/google-services.json manquant."
+            exit 1
+          fi
+          ENTRY="$(unzip -Z1 "$ARCHIVE" | grep -E '(^|/)app/google-services\\.json
+        run: chmod +x ./gradlew
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FamillePlanning-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+ | head -n 1 || true)"
+          if [ -z "$ENTRY" ]; then
+            echo "::error::google-services.json introuvable dans $ARCHIVE. Exporter ce fichier depuis Firebase Console ou configurer un secret GitHub."
+            exit 1
+          fi
+          unzip -p "$ARCHIVE" "$ENTRY" > android/app/google-services.json
+          python3 -c 'import json; f=json.load(open("android/app/google-services.json")); assert f.get("project_info",{}).get("project_id")=="gen-lang-client-0548701351", "Wrong Firebase project"; assert any(any(c.get("client_info",{}).get("android_client_info",{}).get("package_name")=="fr.familleplanning.app" for c in f.get("client",[])) for _ in [0]), "Wrong Android package"; print("Firebase config validated (no credentials printed)")'
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
       - name: Build debug APK
