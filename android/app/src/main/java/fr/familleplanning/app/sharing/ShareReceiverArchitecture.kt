@@ -61,7 +61,7 @@ interface ISharePayloadExtractor {
 /**
  * Types MIME ciblés pour FamillePlanning :
  * - text/plain (SMS, courriels, notes)
- * - image/* (PNG, JPEG, HEIC : affiches de rentrée, flyers périscolaires, convocations)
+ * - image wildcard (PNG, JPEG, HEIC : affiches de rentrée, flyers périscolaires, convocations)
  * - application/pdf (bulletins d'inscription, devis club sportif)
  */
 object SupportedMimeTypes {

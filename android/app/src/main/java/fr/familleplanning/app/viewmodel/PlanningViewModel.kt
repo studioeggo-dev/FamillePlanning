@@ -33,6 +33,13 @@ data class PlanningUiState(
     val userErrorMessage: String? = null
 )
 
+private data class PlanningSelection(
+    val date: LocalDate,
+    val mode: PlanningViewMode,
+    val participantId: String?,
+    val familyId: String?
+)
+
 class PlanningViewModel(
     private val planningRepository: PlanningRepository = PlanningRepository()
 ) : ViewModel() {
@@ -44,15 +51,27 @@ class PlanningViewModel(
     private val _isOperationPending = MutableStateFlow(false)
     private val _userErrorMessage = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<PlanningUiState> = combine(
+    private val selectionFlow = combine(
         _selectedDate,
         _viewMode,
         _selectedParticipantId,
-        _activeFamilyId,
-        planningRepository.syncState,
+        _activeFamilyId
+    ) { date, mode, participantId, familyId ->
+        PlanningSelection(date, mode, participantId, familyId)
+    }
+
+    private val operationFlow = combine(
         _isOperationPending,
         _userErrorMessage
-    ) { date, mode, participantId, familyId, syncState, isPending, errorMsg ->
+    ) { isPending, errorMsg -> Pair(isPending, errorMsg) }
+
+    val uiState: StateFlow<PlanningUiState> = combine(
+        selectionFlow,
+        planningRepository.syncState,
+        operationFlow
+    ) { selection, syncState, operation ->
+        val (date, mode, participantId, familyId) = selection
+        val (isPending, errorMsg) = operation
         val weekDays = DateTimeUtils.getDaysOfWeek(date)
 
         val currentEvents = when (syncState) {

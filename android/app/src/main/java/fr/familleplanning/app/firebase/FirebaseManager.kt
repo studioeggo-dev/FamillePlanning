@@ -62,9 +62,10 @@ object FirebaseManager {
             }
         }
 
-        // Vérification anti-régression: ne jamais retomber sur la base default
-        check(db.databaseId.database == DATABASE_ID) {
-            "ERREUR CRITIQUE: Firestore tente d'accéder à la base '${db.databaseId.database}' au lieu de '$DATABASE_ID'"
+        // Toutes les instances sont créées explicitement avec DATABASE_ID.
+        // FirebaseFirestore ne rend pas databaseId accessible dans son API publique.
+        check(FirebaseApp.getInstance().options.projectId == PROJECT_ID) {
+            "Projet Firebase inattendu : connexion interrompue"
         }
         return db
     }
