@@ -41,25 +41,25 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           if [ -z "$SDKMANAGER" ]; then echo "sdkmanager not found"; exit 1; fi
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
-      - name: Restore Android Firebase configuration
+      - name: Verify official Firebase Android configuration
         working-directory: .
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          from zipfile import ZipFile
-          config = Path("android/app/google-services.json")
-          if not config.is_file():
-              with ZipFile("FamillePlanning-Android.zip") as archive:
-                  names = [n for n in archive.namelist() if n.endswith("/app/google-services.json") or n == "app/google-services.json"]
-                  if not names:
-                      raise RuntimeError("google-services.json missing from both Android directory and AI Studio ZIP")
-                  config.parent.mkdir(parents=True, exist_ok=True)
-                  config.write_bytes(archive.read(names[0]))
-          data = json.loads(config.read_text())
-          assert data["project_info"]["project_id"] == "gen-lang-client-0548701351"
-          assert any(client.get("client_info", {}).get("android_client_info", {}).get("package_name") == "fr.familleplanning.app" for client in data.get("client", []))
-          print("Firebase Android configuration verified")
+          file = Path("android/app/google-services.json")
+          if not file.exists():
+              raise RuntimeError("Missing android/app/google-services.json")
+          cfg = json.loads(file.read_text())
+          assert cfg["project_info"]["project_id"] == "gen-lang-client-0548701351", "Wrong Firebase project"
+          assert cfg["project_info"]["project_number"] == "583230474913", "Wrong Firebase project number"
+          clients = [c for c in cfg.get("client", []) if c.get("client_info",{}).get("android_client_info",{}).get("package_name") == "fr.familleplanning.app"]
+          assert len(clients) == 1, "Android package missing or duplicated"
+          oauth = clients[0].get("oauth_client", [])
+          assert any(c.get("client_type") == 3 for c in oauth), "Missing Web OAuth client"
+          expected_sha = "519c7845edd61c2cb0d10eb77cdc7d18e5367a1b"
+          assert any(c.get("client_type") == 1 and c.get("android_info", {}).get("certificate_hash", "").lower() == expected_sha for c in oauth), "Missing Android OAuth client with expected SHA-1"
+          print("Firebase project, Android OAuth client and signing fingerprint validated")
           PY
       - name: Restore test-only Android signing key
         uses: actions/cache@v4
@@ -74,18 +74,6 @@ jobs:
             keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=FamillePlanning,C=FR" -noprompt
           fi
           keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android | grep -E 'SHA1:|SHA256:'
-      - name: Check Google OAuth client configuration
-        working-directory: .
-        run: |
-          python3 - <<'PY'
-          import json
-          with open("android/app/google-services.json") as fp:
-              cfg = json.load(fp)
-          oauth_types = sorted(set(client.get("client_type") for app in cfg.get("client", []) for client in app.get("oauth_client", [])))
-          print("OAuth client types in Firebase config:", oauth_types)
-          if 3 not in oauth_types:
-              print("WARNING: Missing OAuth WEB client (type 3). Google sign-in will not work until Firebase OAuth is configured and google-services.json refreshed.")
-          PY
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
       - name: Build debug APK
