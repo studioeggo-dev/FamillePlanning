@@ -22,6 +22,19 @@ android {
         }
     }
 
+    // GitHub Actions must use the same debug signing certificate on every build.
+    // Local Android Studio builds retain the standard Android debug configuration.
+    signingConfigs {
+        getByName("debug") {
+            if (System.getenv("CI") == "true") {
+                storeFile = file(System.getenv("HOME") + "/.android/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

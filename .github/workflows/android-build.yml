@@ -90,6 +90,18 @@ jobs:
         run: chmod +x ./gradlew
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify APK signing certificate
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
+          KEY_SHA="$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android | sed -n 's/.*SHA1: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          APK_SHA="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ "$KEY_SHA" != "$APK_SHA" ]; then
+            echo "::error::APK signing key does not match the cached debug key!"
+            exit 1
+          fi
+          echo "APK certificate matches stable debug key"
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
