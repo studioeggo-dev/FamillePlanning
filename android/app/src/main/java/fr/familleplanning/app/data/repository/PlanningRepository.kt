@@ -56,7 +56,7 @@ class PlanningRepository(
 
     /**
      * Active l'écouteur en temps réel sur la collection d'événements du foyer.
-     * Si familyId est null ou "local_demo", passe en mode démonstration local sans toucher à Firestore.
+     * Seul "local_demo" active le mode démo; null signifie aucun foyer réel associé.
      */
     fun startListeningToFamilyEvents(familyId: String?) {
         // Nettoyage préalable de l'écouteur précédent si le foyer change
@@ -66,7 +66,11 @@ class PlanningRepository(
 
         activeFamilyId = familyId
 
-        if (familyId.isNullOrBlank() || familyId == "local_demo") {
+        if (familyId.isNullOrBlank()) {
+            _syncState.value = EventsSyncState.Idle
+            return
+        }
+        if (familyId == "local_demo") {
             _syncState.value = EventsSyncState.DemoMode(demoEventsList.toList())
             return
         }
@@ -122,10 +126,12 @@ class PlanningRepository(
      * Ajoute un événement dans Firestore (base nommée) ou en mode démonstration local.
      */
     suspend fun addEvent(familyId: String?, event: CalendarEvent): Result<Unit> {
-        return if (familyId.isNullOrBlank() || familyId == "local_demo") {
+        return if (familyId == "local_demo") {
             demoEventsList.add(event)
             _syncState.value = EventsSyncState.DemoMode(demoEventsList.toList())
             Result.success(Unit)
+        } else if (familyId.isNullOrBlank()) {
+            Result.failure(IllegalStateException("Aucun foyer associé. Créez votre famille avant d'ajouter un événement."))
         } else {
             try {
                 firestore
@@ -147,13 +153,15 @@ class PlanningRepository(
      * Met à jour un événement existant dans Firestore ou localement.
      */
     suspend fun updateEvent(familyId: String?, event: CalendarEvent): Result<Unit> {
-        return if (familyId.isNullOrBlank() || familyId == "local_demo") {
+        return if (familyId == "local_demo") {
             val index = demoEventsList.indexOfFirst { it.id == event.id }
             if (index != -1) {
                 demoEventsList[index] = event
                 _syncState.value = EventsSyncState.DemoMode(demoEventsList.toList())
             }
             Result.success(Unit)
+        } else if (familyId.isNullOrBlank()) {
+            Result.failure(IllegalStateException("Aucun foyer associé. Créez votre famille avant d'ajouter un événement."))
         } else {
             try {
                 firestore
@@ -176,10 +184,12 @@ class PlanningRepository(
      * Supprime un événement de Firestore ou localement.
      */
     suspend fun deleteEvent(familyId: String?, eventId: String): Result<Unit> {
-        return if (familyId.isNullOrBlank() || familyId == "local_demo") {
+        return if (familyId == "local_demo") {
             demoEventsList.removeAll { it.id == eventId }
             _syncState.value = EventsSyncState.DemoMode(demoEventsList.toList())
             Result.success(Unit)
+        } else if (familyId.isNullOrBlank()) {
+            Result.failure(IllegalStateException("Aucun foyer associé. Créez votre famille avant d'ajouter un événement."))
         } else {
             try {
                 firestore

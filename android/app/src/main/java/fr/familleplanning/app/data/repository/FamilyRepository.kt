@@ -1,5 +1,8 @@
 package fr.familleplanning.app.data.repository
 
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import fr.familleplanning.app.data.models.Family
 import fr.familleplanning.app.data.models.FamilyAccess
@@ -18,6 +21,82 @@ import kotlinx.coroutines.tasks.await
 class FamilyRepository(
     private val firestore: FirebaseFirestore = FirebaseManager.getFirestore()
 ) {
+
+    /**
+     * Crée le foyer et ses droits owner dans un unique batch.
+     * Les règles Firestore côté serveur sont l'autorité finale.
+     * Aucune élévation de privilège locale, aucune écriture démo.
+     */
+    suspend fun createFirstFamily(
+        signedInUser: FirebaseUser,
+        familyName: String,
+        memberName: String,
+        memberColor: String
+    ): Result<String> {
+        return try {
+            val name = familyName.trim()
+            val firstName = memberName.trim()
+            require(name.length in 2..80) { "Le nom de famille doit contenir entre 2 et 80 caractères." }
+            require(firstName.length in 2..60) { "Indiquez votre prénom (2 à 60 caractères)." }
+            require(Regex("^#[0-9A-Fa-f]{6}$").matches(memberColor)) { "Couleur invalide." }
+
+            val uid = signedInUser.uid
+            val userRef = firestore.collection("users").document(uid)
+            val existingUser = userRef.get().await()
+            val linkedFamily = existingUser.getString("currentFamilyId")
+            if (!linkedFamily.isNullOrBlank()) {
+                throw IllegalStateException("Un foyer existe déjà. Actualisez votre compte pour le retrouver.")
+            }
+
+            val familyRef = firestore.collection("families").document()
+            val familyId = familyRef.id
+            val accessRef = familyRef.collection("access").document(uid)
+            val memberRef = familyRef.collection("members").document()
+            val now = Timestamp.now()
+            val batch = firestore.batch()
+
+            batch.set(familyRef, mapOf(
+                "name" to name,
+                "ownerId" to uid,
+                "timezone" to "Europe/Paris",
+                "createdAt" to now
+            ))
+            batch.set(accessRef, mapOf(
+                "role" to "owner",
+                "joinedAt" to now
+            ))
+            batch.set(memberRef, mapOf(
+                "name" to firstName,
+                "userId" to uid,
+                "role" to "parent",
+                "roleLabel" to "Parent",
+                "color" to memberColor,
+                "avatarEmoji" to "😊"
+            ))
+            if (existingUser.exists()) {
+                batch.update(userRef,
+                    "currentFamilyId", familyId,
+                    "familyIds", FieldValue.arrayUnion(familyId),
+                    "updatedAt", now
+                )
+            } else {
+                batch.set(userRef, mapOf(
+                    "id" to uid,
+                    "displayName" to (signedInUser.displayName ?: firstName),
+                    "email" to (signedInUser.email ?: ""),
+                    "photoUrl" to signedInUser.photoUrl?.toString(),
+                    "currentFamilyId" to familyId,
+                    "familyIds" to listOf(familyId),
+                    "createdAt" to now,
+                    "updatedAt" to now
+                ))
+            }
+            batch.commit().await()
+            Result.success(familyId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     /**
      * Récupère les données du foyer familial: families/{familyId}

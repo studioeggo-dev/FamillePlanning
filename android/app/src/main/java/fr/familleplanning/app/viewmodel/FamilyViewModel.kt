@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 
 sealed class FamilyUiState {
     object Loading : FamilyUiState()
+    object NoFamily : FamilyUiState()
     data class Success(
         val family: Family,
         val members: List<FamilyMember>,
@@ -28,23 +29,26 @@ class FamilyViewModel(
     val uiState: StateFlow<FamilyUiState> = _uiState.asStateFlow()
 
     init {
-        loadFamilyData(null)
+        _uiState.value = FamilyUiState.NoFamily
+    }
+
+    fun loadDemoFamily() {
+        _uiState.value = FamilyUiState.Success(
+            family = Family(
+                id = "local_demo_family",
+                name = "Famille Martin",
+                timezone = "Europe/Paris"
+            ),
+            members = getDemoFamilyMembers(),
+            isRemoteSource = false
+        )
     }
 
     fun loadFamilyData(familyId: String?) {
         _uiState.value = FamilyUiState.Loading
 
         if (familyId.isNullOrBlank()) {
-            // Affichage de prévisualisation locale des membres si pas encore de famille distante active
-            _uiState.value = FamilyUiState.Success(
-                family = Family(
-                    id = "local_demo_family",
-                    name = "Famille Martin",
-                    timezone = "Europe/Paris"
-                ),
-                members = getDemoFamilyMembers(),
-                isRemoteSource = false
-            )
+            _uiState.value = FamilyUiState.NoFamily
             return
         }
 

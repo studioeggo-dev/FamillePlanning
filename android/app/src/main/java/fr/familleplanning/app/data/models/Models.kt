@@ -87,7 +87,10 @@ data class User(
                 email = email,
                 displayName = name,
                 photoUrl = map["photoUrl"] as? String ?: map["avatarUrl"] as? String,
-                activeFamilyId = map["currentFamilyId"] as? String ?: map["activeFamilyId"] as? String,
+                activeFamilyId = (map["currentFamilyId"] as? String)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: (map["activeFamilyId"] as? String)?.takeIf { it.isNotBlank() }
+                    ?: (map["familyIds"] as? List<*>)?.filterIsInstance<String>()?.firstOrNull { it.isNotBlank() },
                 createdAt = createdAt
             )
         }
