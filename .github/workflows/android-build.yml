@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build Android debug APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
       run:
@@ -37,46 +37,30 @@ jobs:
             android/gradle/wrapper/gradle-wrapper.properties
       - name: Install Android SDK platform
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          set -e
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager absent du SDK Android" >&2
-            exit 1
-          fi
-          echo "Using: $SDKMANAGER"
+          if [ -z "$SDKMANAGER" ]; then echo "sdkmanager not found"; exit 1; fi
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
-      - name: Restore Android Firebase configuration from AI Studio archive
+      - name: Restore Android Firebase configuration
         working-directory: .
         run: |
-          set -euo pipefail
-          ARCHIVE="FamillePlanning-Android.zip"
-          if [ -f android/app/google-services.json ]; then
-            echo "Firebase configuration already present."
-            exit 0
-          fi
-          if [ ! -f "$ARCHIVE" ]; then
-            echo "::error::Archive $ARCHIVE absente et android/app/google-services.json manquant."
-            exit 1
-          fi
-          ENTRY="$(unzip -Z1 "$ARCHIVE" | grep -E '(^|/)app/google-services\\.json
-        run: chmod +x ./gradlew
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: FamillePlanning-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
- | head -n 1 || true)"
-          if [ -z "$ENTRY" ]; then
-            echo "::error::google-services.json introuvable dans $ARCHIVE. Exporter ce fichier depuis Firebase Console ou configurer un secret GitHub."
-            exit 1
-          fi
-          unzip -p "$ARCHIVE" "$ENTRY" > android/app/google-services.json
-          python3 -c 'import json; f=json.load(open("android/app/google-services.json")); assert f.get("project_info",{}).get("project_id")=="gen-lang-client-0548701351", "Wrong Firebase project"; assert any(any(c.get("client_info",{}).get("android_client_info",{}).get("package_name")=="fr.familleplanning.app" for c in f.get("client",[])) for _ in [0]), "Wrong Android package"; print("Firebase config validated (no credentials printed)")'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from zipfile import ZipFile
+          config = Path("android/app/google-services.json")
+          if not config.is_file():
+              with ZipFile("FamillePlanning-Android.zip") as archive:
+                  names = [n for n in archive.namelist() if n.endswith("/app/google-services.json") or n == "app/google-services.json"]
+                  if not names:
+                      raise RuntimeError("google-services.json missing from both Android directory and AI Studio ZIP")
+                  config.parent.mkdir(parents=True, exist_ok=True)
+                  config.write_bytes(archive.read(names[0]))
+          data = json.loads(config.read_text())
+          assert data["project_info"]["project_id"] == "gen-lang-client-0548701351"
+          assert any(client.get("client_info", {}).get("android_client_info", {}).get("package_name") == "fr.familleplanning.app" for client in data.get("client", []))
+          print("Firebase Android configuration verified")
+          PY
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
       - name: Build debug APK
