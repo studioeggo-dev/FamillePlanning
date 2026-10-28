@@ -1,643 +1,382 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState } from 'react';
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Calendar,
-  Users,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  Database,
-  Smartphone,
-  Code2,
-  FileText,
-  AlertCircle,
-  LogOut,
-  RefreshCw,
-  Download,
-  ShieldCheck,
-  Zap
-} from 'lucide-react';
+  CalendarDays, Users, Plus, Link2, Copy, Check, LogOut, RefreshCw,
+  ShieldCheck, Baby, Mail, ArrowRight, CalendarPlus, Clock, LockKeyhole
+} from "lucide-react";
+import {
+  GoogleAuthProvider, onAuthStateChanged, signInWithPopup,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  sendEmailVerification, reload, signOut, type User
+} from "firebase/auth";
+import {auth, configured} from "./firebase";
+import {
+  readProfile, createFirstFamily, getHome, getRole, observeMembers, observeEvents,
+  addChild, createInvite, previewInvite, acceptInvite, addEvent, friendlyError,
+  type Family, type Member, type Event
+} from "./familyService";
+import type {Unsubscribe} from "firebase/firestore";
 
-interface Member {
-  id: string;
-  firstName: string;
-  role: string;
-  colorHex: string;
-  initial: string;
-  isChild: boolean;
-  birthDate?: string;
+const colors=["#FF6B6B","#48DBFB","#1DD1A1","#FECA57","#A55EEA","#FF9F43"];
+const today=()=>new Date().toLocaleDateString("en-CA");
+const dateLabel=(date:Date)=>new Intl.DateTimeFormat("fr-FR",{weekday:"long",day:"numeric",month:"long"}).format(date);
+const timeLabel=(date:Date)=>new Intl.DateTimeFormat("fr-FR",{hour:"2-digit",minute:"2-digit"}).format(date);
+const parentRoles=["owner","parent","admin"];
+const COLOR="#FF6B6B";
+
+function EmojiAvatar({name,color,size=42}:{name:string,color:string,size?:number}) {
+  return <span className="avatar" style={{width:size,height:size,background:color+"22",color,borderColor:color}}>{name.slice(0,1).toLocaleUpperCase("fr")}</span>;
 }
-
-const MEMBERS: Member[] = [
-  { id: 'sophie', firstName: 'Sophie', role: 'Maman', colorHex: '#FF6B6B', initial: 'S', isChild: false },
-  { id: 'thomas', firstName: 'Thomas', role: 'Papa', colorHex: '#48DBFB', initial: 'T', isChild: false },
-  { id: 'emma', firstName: 'Emma', role: 'Fille aînée', colorHex: '#A55EEA', initial: 'E', isChild: true, birthDate: '12/04/2015' },
-  { id: 'leo', firstName: 'Léo', role: 'Cadet', colorHex: '#1DD1A1', initial: 'L', isChild: true, birthDate: '28/09/2019' }
-];
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  timeLabel: string;
-  category: string;
-  categoryLabel: string;
-  colorHex: string;
-  location?: string;
-  participantIds: string[];
+function Colors({value,onChange}:{value:string,onChange:(v:string)=>void}) {
+  return <div className="color-row">{colors.map(c=><button key={c} type="button" title={"Choisir "+c}
+    onClick={()=>onChange(c)} className={"color-dot "+(value===c?"selected":"")} style={{background:c}} />)}</div>;
 }
-
-const DEMO_EVENTS: CalendarEvent[] = [
-  {
-    id: '1',
-    title: 'Entraînement de Judo',
-    timeLabel: '17h30 - 19h00',
-    category: 'sport',
-    categoryLabel: 'Sport',
-    colorHex: '#1DD1A1',
-    location: 'Dojo Municipal',
-    participantIds: ['leo']
-  },
-  {
-    id: '2',
-    title: 'Rendez-vous Pédiatre',
-    timeLabel: '10h00 - 10h45',
-    category: 'health',
-    categoryLabel: 'Santé',
-    colorHex: '#FF6B6B',
-    location: 'Cabinet Dr. Martin',
-    participantIds: ['sophie', 'emma']
-  },
-  {
-    id: '3',
-    title: 'Cours de Piano',
-    timeLabel: '14h00 - 15h00',
-    category: 'school',
-    categoryLabel: 'Musique',
-    colorHex: '#A55EEA',
-    location: 'Conservatoire',
-    participantIds: ['emma']
-  },
-  {
-    id: '4',
-    title: "Réunion Parents d'Élèves",
-    timeLabel: '18h30 - 20h00',
-    category: 'school',
-    categoryLabel: 'École',
-    colorHex: '#48DBFB',
-    location: 'École Jean Moulin',
-    participantIds: ['sophie', 'thomas']
-  },
-  {
-    id: '5',
-    title: 'Sortie Parc & Vélo en Famille',
-    timeLabel: '14h30 - 17h30',
-    category: 'outing',
-    categoryLabel: 'Sortie',
-    colorHex: '#FECA57',
-    location: 'Grand Parc des Naudières',
-    participantIds: ['sophie', 'thomas', 'emma', 'leo']
-  }
-];
+function Notice({text,onDismiss}:{text:string,onDismiss:()=>void}) {
+  return <div className="notice" role="status"><p>{text}</p><button onClick={onDismiss} aria-label="Fermer">×</button></div>;
+}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'device' | 'firebase' | 'code' | 'docs'>('device');
-  const [mobileScreen, setMobileScreen] = useState<'welcome' | 'planning' | 'family' | 'settings'>('planning');
-  
-  const [isSignedIn, setIsSignedIn] = useState(true);
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showAddFeedback, setShowAddFeedback] = useState(false);
+  const [account,setAccount]=useState<User|null>(null);
+  const [ready,setReady]=useState(false);
+  const [familyId,setFamilyId]=useState<string|null>(null);
+  const [family,setFamily]=useState<Family|null>(null);
+  const [role,setRole]=useState("");
+  const [members,setMembers]=useState<Member[]>([]);
+  const [events,setEvents]=useState<Event[]>([]);
+  const [tab,setTab]=useState<"planning"|"family">("planning");
+  const [busy,setBusy]=useState(false);
+  const [notice,setNotice]=useState("");
+  const [inviteToken,setInviteToken]=useState(()=>new URLSearchParams(window.location.search).get("invite")||"");
+  const [preview,setPreview]=useState<{familyName:string,role:string,expiresAt:string}|null>(null);
+  const [emailMode,setEmailMode]=useState<"login"|"signup"|null>(null);
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [acceptName,setAcceptName]=useState("");
+  const [acceptColor,setAcceptColor]=useState(COLOR);
+  const [setupName,setSetupName]=useState("");
+  const [setupFirstName,setSetupFirstName]=useState("");
+  const [setupColor,setSetupColor]=useState(COLOR);
+  const [childOpen,setChildOpen]=useState(false);
+  const [childName,setChildName]=useState("");
+  const [childBirth,setChildBirth]=useState("");
+  const [childColor,setChildColor]=useState("#A55EEA");
+  const [inviteOpen,setInviteOpen]=useState(false);
+  const [inviteRole,setInviteRole]=useState<"parent"|"adult">("adult");
+  const [inviteEmail,setInviteEmail]=useState("");
+  const [generatedLink,setGeneratedLink]=useState("");
+  const [day,setDay]=useState(today());
+  const [eventOpen,setEventOpen]=useState(false);
+  const [eventTitle,setEventTitle]=useState("");
+  const [eventStart,setEventStart]=useState("17:00");
+  const [eventEnd,setEventEnd]=useState("18:00");
+  const [eventLocation,setEventLocation]=useState("");
+  const [participants,setParticipants]=useState<string[]>([]);
 
-  const weekDays = [
-    { name: 'Lun', date: 26, isToday: true },
-    { name: 'Mar', date: 27, isToday: false },
-    { name: 'Mer', date: 28, isToday: false },
-    { name: 'Jeu', date: 29, isToday: false },
-    { name: 'Ven', date: 30, isToday: false },
-    { name: 'Sam', date: 31, isToday: false },
-    { name: 'Dim', date: 1, isToday: false }
-  ];
+  async function refreshProfile(user:User) {
+    const profile=await readProfile(user.uid);
+    setFamilyId(profile.currentFamilyId);
+    return profile;
+  }
+  useEffect(()=>{
+    if (!configured || !auth) {setReady(true);return;}
+    return onAuthStateChanged(auth,async user=>{
+      setAccount(user);
+      setFamilyId(null);
+      setReady(false);
+      if(user){
+        try {await refreshProfile(user);}
+        catch(e){setNotice("Chargement du profil : "+friendlyError(e));}
+      }
+      setReady(true);
+    });
+  },[]);
+  useEffect(()=>{
+    if(!familyId || !account) {
+      setFamily(null);setRole("");setMembers([]);setEvents([]);
+      return;
+    }
+    let alive=true;
+    const subs:Unsubscribe[]=[];
+    Promise.all([getHome(familyId),getRole(familyId,account.uid)]).then(([home,accessRole])=>{
+      if(alive){setFamily(home);setRole(accessRole || (home.ownerId===account.uid?"owner":"viewer"));}
+    }).catch(e=>setNotice("Lecture de la famille : "+friendlyError(e)));
+    subs.push(observeMembers(familyId,items=>{if(alive)setMembers(items);},e=>setNotice(friendlyError(e))));
+    subs.push(observeEvents(familyId,items=>{if(alive)setEvents(items);},e=>setNotice(friendlyError(e))));
+    return ()=>{alive=false;subs.forEach(unsub=>unsub());};
+  },[account?.uid,familyId]);
+  useEffect(()=>{
+    if(!inviteToken || !account){setPreview(null);return;}
+    let active=true;
+    previewInvite(inviteToken).then(p=>{if(active)setPreview(p);})
+      .catch(e=>{if(active){setPreview(null);setNotice("Invitation : "+friendlyError(e));}});
+    return ()=>{active=false;};
+  },[inviteToken,account?.uid]);
 
-  const filteredEvents = DEMO_EVENTS.filter(evt => {
-    if (!selectedParticipantId) return true;
-    return evt.participantIds.includes(selectedParticipantId);
-  });
+  const isParent=parentRoles.includes(role)||family?.ownerId===account?.uid;
+  const parentsCount=members.filter(m=>parentRoles.includes(m.role)).length;
+  const visibleEvents=useMemo(()=>{
+    return events.filter(e=>new Date(e.startAt).toLocaleDateString("en-CA")===day)
+      .sort((a,b)=>a.startAt.getTime()-b.startAt.getTime());
+  },[events,day]);
+  async function run(action:()=>Promise<void>) {
+    if(busy)return;
+    setBusy(true);setNotice("");
+    try {await action();}
+    catch(e){setNotice(friendlyError(e));}
+    finally{setBusy(false);}
+  }
+  async function googleLogin() {
+    await run(async()=>{
+      if(!auth)throw new Error("Firebase Web non configuré.");
+      await signInWithPopup(auth,new GoogleAuthProvider());
+    });
+  }
+  async function loginEmail(e:React.FormEvent){
+    e.preventDefault();
+    await run(async()=>{
+      if(!auth)throw new Error("Firebase Web non configuré.");
+      if(emailMode==="signup"){
+        const res=await createUserWithEmailAndPassword(auth,email,password);
+        await sendEmailVerification(res.user);
+        setNotice("Vérifiez votre e-mail avant d'accepter une invitation.");
+      } else {
+        await signInWithEmailAndPassword(auth,email,password);
+      }
+      setEmailMode(null);setPassword("");
+    });
+  }
+  async function createFamily(e:React.FormEvent){
+    e.preventDefault();
+    if(!account)return;
+    await run(async()=>{
+      await createFirstFamily(account,setupName,setupFirstName,setupColor);
+      await refreshProfile(account);
+      setNotice("Votre famille est créée et synchronisée !");
+    });
+  }
+  async function createChild(e:React.FormEvent){
+    e.preventDefault();
+    if(!familyId)return;
+    await run(async()=>{
+      await addChild(familyId,childName,childBirth||null,childColor);
+      setChildOpen(false);setChildName("");setChildBirth("");
+      setNotice("L'enfant apparaît dans la famille et dans les filtres du planning.");
+    });
+  }
+  async function shareInvite(e:React.FormEvent){
+    e.preventDefault();
+    if(!familyId)return;
+    await run(async()=>{
+      const answer=await createInvite(familyId,inviteRole,inviteEmail||null);
+      const url=new URL(window.location.origin+window.location.pathname);
+      url.searchParams.set("invite",answer.token);
+      setGeneratedLink(url.toString());
+      setInviteOpen(false);setInviteEmail("");
+    });
+  }
+  async function accept(e:React.FormEvent) {
+    e.preventDefault();
+    if(!account)return;
+    await run(async()=>{
+      await reload(account);
+      if(!account.emailVerified)throw new Error("Vérifiez d'abord votre adresse e-mail, puis actualisez votre compte.");
+      await acceptInvite(inviteToken,acceptName,acceptColor);
+      setInviteToken("");setPreview(null);
+      window.history.replaceState({}, "",window.location.pathname);
+      await refreshProfile(account);
+      setNotice("Bienvenue dans votre famille !");
+    });
+  }
+  async function createEvent(e:React.FormEvent) {
+    e.preventDefault();
+    if(!familyId||!account)return;
+    await run(async()=>{
+      await addEvent(familyId,account.uid,{
+        title:eventTitle,startAt:new Date(day+"T"+eventStart),
+        endAt:new Date(day+"T"+eventEnd),
+        participantIds:participants,location:eventLocation
+      });
+      setEventOpen(false);setEventTitle("");setEventLocation("");setParticipants([]);
+      setNotice("Rendez-vous ajouté au calendrier partagé.");
+    });
+  }
+  function parseInvitation(raw:string) {
+    const v=raw.trim();
+    if(!v)return;
+    try {
+      const url=new URL(v);
+      const token=url.searchParams.get("token")||url.searchParams.get("invite");
+      if(token){setInviteToken(token);return;}
+    } catch {}
+    setInviteToken(v);
+  }
+  function copyLink() {
+    navigator.clipboard.writeText(generatedLink).then(()=>setNotice("Lien d'invitation copié."))
+      .catch(()=>setNotice("Sélectionnez et copiez le lien affiché."));
+  }
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 800);
-  };
+  if(!configured) return <div className="screen"><div className="panel compact">
+    <div className="logo"><CalendarDays size={34}/></div>
+    <h1>FamillePlanning</h1><p className="muted">Application Web en préparation</p>
+    <p>Le simulateur a été remplacé par la version Firebase réelle. Pour l'activer, configurez
+      <code>VITE_FIREBASE_API_KEY</code>, <code>VITE_FIREBASE_AUTH_DOMAIN</code> et <code>VITE_FIREBASE_APP_ID</code> avec les paramètres de l'application <b>Web</b> dans Firebase.</p>
+    <p className="muted">Le projet Firebase et la base nommée sont déjà configurés dans le code. Aucune fausse donnée n'est affichée.</p>
+  </div></div>;
 
-  const handleAddClick = () => {
-    setShowAddFeedback(true);
-    setTimeout(() => setShowAddFeedback(false), 2400);
-  };
+  if(!ready) return <div className="screen center"><div className="loader"/>Chargement sécurisé...</div>;
 
-  return (
-    <div className="min-h-screen bg-stone-100 text-stone-800 flex flex-col font-sans">
-      {/* Barre de navigation supérieure AI Studio */}
-      <header className="bg-white border-b border-stone-200 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xs sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#FF6B6B] to-[#FECA57] flex items-center justify-center text-white shadow-xs">
-            <Calendar className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-lg text-stone-900 tracking-tight">FamillePlanning</h1>
-              <span className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">
-                Validation Finale 3A Validée
-              </span>
-            </div>
-            <p className="text-xs text-stone-500">
-              Projet Android Studio Prêt &bull; Schéma Canonique Web Synchrone
-            </p>
-          </div>
-        </div>
-
-        {/* Bouton de téléchargement de l'archive ZIP Android Studio */}
-        <div className="flex items-center gap-3">
-          <a
-            href="/FamillePlanning-Android.zip"
-            download
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95"
-          >
-            <Download className="w-4 h-4 text-[#FECA57]" />
-            <span>Télécharger FamillePlanning-Android.zip</span>
-          </a>
-
-          {/* Sélecteur d'onglets */}
-          <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
-            <button
-              onClick={() => setActiveTab('device')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
-                activeTab === 'device'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-[#FF6B6B]" />
-              <span>Simulateur UI</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('firebase')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
-                activeTab === 'firebase'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5 text-[#1DD1A1]" />
-              <span>Schéma Canonique</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('code')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
-                activeTab === 'code'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Code2 className="w-3.5 h-3.5 text-[#48DBFB]" />
-              <span>Code Kotlin & Gradle</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('docs')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
-                activeTab === 'docs'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-[#A55EEA]" />
-              <span>Rapport Validation</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Contenu principal */}
-      <main className="flex-1 p-4 md:p-8 flex items-center justify-center">
-        {activeTab === 'device' && (
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-8 w-full max-w-6xl">
-            {/* Cadre de Smartphone Android */}
-            <div className="relative w-[390px] h-[812px] bg-white rounded-[44px] shadow-2xl border-[9px] border-stone-850 overflow-hidden flex flex-col ring-1 ring-black/5 shrink-0">
-              {/* Barre de statut */}
-              <div className="bg-[#FDFBF7] px-6 pt-3 pb-1 flex items-center justify-between text-xs text-stone-600 font-semibold select-none">
-                <span>09:41</span>
-                <div className="w-4 h-4 rounded-full bg-stone-900"></div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">5G</span>
-                  <div className="w-4 h-2.5 border border-stone-600 rounded-xs p-0.5 flex items-center">
-                    <div className="w-full h-full bg-stone-700 rounded-2xs"></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Écran actif */}
-              <div className="flex-1 bg-[#FDFBF7] overflow-y-auto flex flex-col relative select-none">
-                {showAddFeedback && (
-                  <div className="absolute top-4 left-4 right-4 z-40 bg-stone-900 text-white text-xs px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-bounce">
-                    <CheckCircle2 className="w-4 h-4 text-[#1DD1A1] shrink-0" />
-                    <span>Prêt pour la synchronisation Phase 3B.</span>
-                  </div>
-                )}
-
-                {/* ÉCRAN BIENVENUE */}
-                {mobileScreen === 'welcome' && (
-                  <div className="flex-1 p-6 flex flex-col justify-between">
-                    <div className="flex-1 flex flex-col items-center justify-center text-center">
-                      <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#FF6B6B] to-[#FECA57] flex items-center justify-center text-white shadow-lg shadow-orange-500/20 mb-6">
-                        <Calendar className="w-12 h-12" />
-                      </div>
-                      <h2 className="text-2xl font-black text-stone-900 tracking-tight">FamillePlanning</h2>
-                      <p className="text-sm text-stone-600 mt-2 max-w-[260px] leading-relaxed">
-                        Le planning partagé et serein de toute la famille
-                      </p>
-
-                      <div className="flex gap-2 mt-6">
-                        {MEMBERS.map(m => (
-                          <div
-                            key={m.id}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-xs"
-                            style={{ backgroundColor: m.colorHex }}
-                          >
-                            {m.initial}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => setMobileScreen('planning')}
-                        className="w-full bg-[#FF6B6B] hover:bg-[#EE5253] text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition-all"
-                      >
-                        Accéder à mon planning
-                      </button>
-                      <p className="text-[11px] text-stone-400 text-center">
-                        Données familiales chiffrées &bull; Accès sécurisé
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* ÉCRAN PLANNING */}
-                {mobileScreen === 'planning' && (
-                  <div className="flex-1 flex flex-col pb-20">
-                    <div className="bg-white px-5 pt-4 pb-4 rounded-b-3xl shadow-xs border-b border-stone-200/60">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h2 className="text-lg font-black text-stone-900 tracking-tight">Famille Martin</h2>
-                          <p className="text-xs font-bold text-[#FF6B6B]">Lundi 26 octobre 2026</p>
-                        </div>
-                        <button
-                          onClick={() => setSelectedDayIndex(0)}
-                          className="text-xs bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold px-3 py-1.5 rounded-xl transition-all"
-                        >
-                          Aujourd'hui
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="bg-stone-100 p-0.5 rounded-xl flex text-xs">
-                          <button
-                            onClick={() => setViewMode('week')}
-                            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                              viewMode === 'week' ? 'bg-[#FF6B6B] text-white' : 'text-stone-600'
-                            }`}
-                          >
-                            Semaine
-                          </button>
-                          <button
-                            onClick={() => setViewMode('month')}
-                            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                              viewMode === 'month' ? 'bg-[#FF6B6B] text-white' : 'text-stone-600'
-                            }`}
-                          >
-                            Mois
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-700 hover:bg-stone-200">
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          <button className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-700 hover:bg-stone-200">
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {viewMode === 'week' && (
-                      <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
-                        {weekDays.map((d, idx) => {
-                          const isSelected = selectedDayIndex === idx;
-                          return (
-                            <button
-                              key={d.name}
-                              onClick={() => setSelectedDayIndex(idx)}
-                              className={`flex-1 min-w-[42px] py-2 rounded-2xl flex flex-col items-center justify-center transition-all ${
-                                isSelected
-                                  ? 'bg-[#FF6B6B] text-white shadow-sm'
-                                  : 'bg-white text-stone-700 shadow-2xs border border-stone-200/60'
-                              }`}
-                            >
-                              <span className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
-                                {d.name}
-                              </span>
-                              <span className="text-sm font-bold mt-0.5">{d.date}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className="px-4 py-1 flex gap-2 overflow-x-auto no-scrollbar">
-                      <button
-                        onClick={() => setSelectedParticipantId(null)}
-                        className={`text-xs px-3 py-1.5 rounded-full font-bold shrink-0 transition-all ${
-                          selectedParticipantId === null
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-white text-stone-600 border border-stone-200'
-                        }`}
-                      >
-                        Tous
-                      </button>
-                      {MEMBERS.map(m => {
-                        const isSelected = selectedParticipantId === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            onClick={() => setSelectedParticipantId(isSelected ? null : m.id)}
-                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-bold shrink-0 transition-all ${
-                              isSelected
-                                ? 'bg-white text-stone-900 border-2'
-                                : 'bg-white text-stone-600 border border-stone-200'
-                            }`}
-                            style={{ borderColor: isSelected ? m.colorHex : undefined }}
-                          >
-                            <span
-                              className="w-2.5 h-2.5 rounded-full"
-                              style={{ backgroundColor: m.colorHex }}
-                            />
-                            <span>{m.firstName}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mx-4 mt-2 mb-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 flex items-start gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Validation Dates Stricte :</strong> Les dates manquantes lèvent une exception au lieu de créer un faux rendez-vous.
-                      </span>
-                    </div>
-
-                    <div className="px-4 space-y-3 flex-1 overflow-y-auto">
-                      {filteredEvents.map(event => (
-                        <div
-                          key={event.id}
-                          className="bg-white rounded-2xl p-3.5 shadow-xs border border-stone-200/60 flex gap-3 relative overflow-hidden"
-                        >
-                          <div
-                            className="w-2 self-stretch rounded-full shrink-0"
-                            style={{ backgroundColor: event.colorHex }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <span
-                                className="text-[11px] font-bold flex items-center gap-1"
-                                style={{ color: event.colorHex }}
-                              >
-                                <Clock className="w-3 h-3" />
-                                {event.timeLabel}
-                              </span>
-                              <span
-                                className="text-[10px] font-bold px-2 py-0.5 rounded-md"
-                                style={{
-                                  backgroundColor: `${event.colorHex}20`,
-                                  color: event.colorHex
-                                }}
-                              >
-                                {event.categoryLabel}
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-sm text-stone-900 mt-1 truncate">{event.title}</h4>
-                            {event.location && (
-                              <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-1 truncate">
-                                <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
-                                {event.location}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={handleAddClick}
-                      className="absolute right-5 bottom-20 w-14 h-14 rounded-full bg-[#FF6B6B] hover:bg-[#EE5253] text-white shadow-xl flex items-center justify-center transition-transform active:scale-95"
-                    >
-                      <Plus className="w-7 h-7" />
-                    </button>
-                  </div>
-                )}
-
-                {/* ÉCRAN MA FAMILLE */}
-                {mobileScreen === 'family' && (
-                  <div className="flex-1 flex flex-col pb-20">
-                    <div className="bg-white px-5 py-4 rounded-b-3xl shadow-xs border-b border-stone-200/60 flex items-center justify-between">
-                      <div>
-                        <h2 className="text-lg font-black text-stone-900">Ma famille</h2>
-                        <p className="text-xs text-stone-500">Membres du foyer et profils</p>
-                      </div>
-                      <button
-                        onClick={handleRefresh}
-                        className={`p-2 rounded-xl text-[#FF6B6B] hover:bg-stone-100 ${
-                          isRefreshing ? 'animate-spin' : ''
-                        }`}
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="p-4 space-y-3">
-                      {MEMBERS.map(m => (
-                        <div
-                          key={m.id}
-                          className="bg-white rounded-2xl p-4 shadow-xs border border-stone-200/60 flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <div
-                              className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-black border-2"
-                              style={{
-                                backgroundColor: `${m.colorHex}20`,
-                                borderColor: m.colorHex,
-                                color: m.colorHex
-                              }}
-                            >
-                              {m.initial}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-stone-900 text-sm">{m.firstName}</h4>
-                              <p className="text-xs font-semibold" style={{ color: m.colorHex }}>
-                                {m.role}
-                              </p>
-                            </div>
-                          </div>
-                          <div
-                            className="w-4 h-4 rounded-full shadow-2xs"
-                            style={{ backgroundColor: m.colorHex }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* ÉCRAN PARAMÈTRES */}
-                {mobileScreen === 'settings' && (
-                  <div className="flex-1 flex flex-col pb-20">
-                    <div className="bg-white px-5 py-4 rounded-b-3xl shadow-xs border-b border-stone-200/60">
-                      <h2 className="text-lg font-black text-stone-900">Paramètres</h2>
-                      <p className="text-xs text-stone-500">Compte, foyer et préférences</p>
-                    </div>
-
-                    <div className="p-4 space-y-4 text-xs">
-                      <div className="bg-white rounded-2xl p-4 shadow-xs border border-stone-200/60 space-y-2">
-                        <span className="font-bold text-[#FF6B6B] block">Foyer actif</span>
-                        <p className="font-bold text-stone-900 text-sm">Famille Martin</p>
-                        <div className="bg-stone-50 p-2.5 rounded-xl font-mono text-[10px] text-stone-600 break-all space-y-1">
-                          <p><strong>Database :</strong> ai-studio-familleplanning-5bf1e4ae-719b-4752-9367-6a8444b48be1</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Barre de navigation inférieure */}
-              <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-6 py-2.5 flex items-center justify-around z-20">
-                <button
-                  onClick={() => setMobileScreen('planning')}
-                  className={`flex flex-col items-center gap-1 text-xs font-bold transition-all ${
-                    mobileScreen === 'planning' ? 'text-[#FF6B6B]' : 'text-stone-400'
-                  }`}
-                >
-                  <Calendar className="w-5 h-5" />
-                  <span>Planning</span>
-                </button>
-                <button
-                  onClick={() => setMobileScreen('family')}
-                  className={`flex flex-col items-center gap-1 text-xs font-bold transition-all ${
-                    mobileScreen === 'family' ? 'text-[#FF6B6B]' : 'text-stone-400'
-                  }`}
-                >
-                  <Users className="w-5 h-5" />
-                  <span>Ma famille</span>
-                </button>
-                <button
-                  onClick={() => setMobileScreen('settings')}
-                  className={`flex flex-col items-center gap-1 text-xs font-bold transition-all ${
-                    mobileScreen === 'settings' ? 'text-[#FF6B6B]' : 'text-stone-400'
-                  }`}
-                >
-                  <Settings className="w-5 h-5" />
-                  <span>Paramètres</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Panneau latéral */}
-            <div className="max-w-md w-full space-y-4">
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-stone-200 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-stone-900 font-bold">
-                    <Zap className="w-5 h-5 text-[#FF6B6B]" />
-                    <h3 className="text-base font-bold">Projet Android Autonome Prêt</h3>
-                  </div>
-                </div>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  L'archive ZIP contient l'ensemble du projet Android Studio sans aucune dépendance envers le code React.
-                </p>
-
-                <a
-                  href="/FamillePlanning-Android.zip"
-                  download
-                  className="w-full bg-[#FF6B6B] hover:bg-[#EE5253] text-white text-xs font-bold py-3 px-4 rounded-2xl shadow-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Télécharger FamillePlanning-Android.zip</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SCHÉMA CANONIQUE */}
-        {activeTab === 'firebase' && (
-          <div className="w-full max-w-4xl bg-white rounded-3xl p-8 shadow-sm border border-stone-200 space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
-                <Database className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-stone-900">Schéma Canonique d'Écriture Firestore</h2>
-                <p className="text-xs text-stone-500">Alignement exact sur les règles Firestore et l'application Web</p>
-              </div>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200">
-                <p className="font-bold text-stone-900 mb-1">`families/{'{familyId}'}/events/{'{eventId}'}`</p>
-                <code className="text-emerald-700 block bg-white p-3 rounded-xl border border-stone-200 font-mono">
-                  {`{
-  familyId: string,
-  title: string,
-  description: string,
-  startAt: Timestamp,      // Canonique (startInstant lu en fallback)
-  endAt: Timestamp,        // Canonique (endInstant lu en fallback)
-  allDay: boolean,         // Canonique (isAllDay lu en fallback)
-  participantIds: string[],
-  category: string,
-  color: string,           // Canonique (colorHex lu en fallback)
-  location: string,
-  createdBy: string,
-  createdAt: Timestamp
-}`}
-                </code>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* CODE KOTLIN */}
-        {activeTab === 'code' && (
-          <div className="w-full max-w-4xl bg-white rounded-3xl p-8 shadow-sm border border-stone-200 space-y-4">
-            <h2 className="text-xl font-bold text-stone-900">Fichiers Android Créés</h2>
-            <p className="text-xs text-stone-500">Valides, structurés et pré-configurés avec Gradle Wrapper</p>
-          </div>
-        )}
-
-        {/* DOCUMENTATION */}
-        {activeTab === 'docs' && (
-          <div className="w-full max-w-4xl bg-white rounded-3xl p-8 shadow-sm border border-stone-200 space-y-4">
-            <h2 className="text-xl font-bold text-stone-900">Rapport de Validation 3A</h2>
-            <p className="text-xs text-stone-500">Synthèse technique complète</p>
-          </div>
-        )}
-      </main>
+  if(!account) return <div className="screen center">
+    <div className="panel compact">
+      <div className="logo"><CalendarDays size={32}/></div>
+      <h1>FamillePlanning</h1>
+      <p className="muted">Votre tribu, vos rendez-vous, tout au même endroit.</p>
+      {inviteToken&&<p className="highlight">Invitation reçue ! Connectez-vous pour rejoindre votre famille.</p>}
+      <button className="button primary full" onClick={googleLogin} disabled={busy}>Continuer avec Google</button>
+      {!emailMode&&<div className="two-buttons">
+        <button className="button secondary" onClick={()=>setEmailMode("login")}>Connexion e-mail</button>
+        <button className="button secondary" onClick={()=>setEmailMode("signup")}>Créer un compte</button>
+      </div>}
+      {emailMode&&<form className="stack" onSubmit={loginEmail}>
+        <label>Adresse e-mail<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label>
+        <label>Mot de passe<input type="password" autoComplete={emailMode==="signup"?"new-password":"current-password"}
+          minLength={6} required value={password} onChange={e=>setPassword(e.target.value)}/></label>
+        <button disabled={busy} className="button primary full" type="submit">{emailMode==="signup"?"Créer mon compte adulte":"Me connecter"}</button>
+        <button type="button" className="link" onClick={()=>setEmailMode(null)}>Retour</button>
+      </form>}
+      <p className="footnote">Les enfants ont leur profil de planning, sans compte de connexion. Les comptes e-mail sont destinés aux adultes.</p>
+      {notice&&<Notice text={notice} onDismiss={()=>setNotice("")}/>}
     </div>
-  );
+  </div>;
+
+  if(inviteToken) return <div className="screen center">
+    <div className="panel compact">
+      <div className="logo mint"><Link2 size={30}/></div>
+      <h1>Rejoindre une famille</h1>
+      <p className="muted">Connecté : {account.email}</p>
+      {preview ? <>
+        <div className="highlight"><b>{preview.familyName}</b><br/>Vous rejoindrez ce foyer comme {preview.role==="parent"?"second parent titulaire":"adulte invité"}.</div>
+        {!account.emailVerified&&<p className="error">Adresse e-mail non vérifiée. Ouvrez le message de vérification reçu ou reconnectez-vous après l'avoir validée.</p>}
+        <form onSubmit={accept} className="stack">
+          <label>Votre prénom<input required minLength={2} maxLength={60} value={acceptName} onChange={e=>setAcceptName(e.target.value)}/></label>
+          <label>Couleur personnelle<Colors value={acceptColor} onChange={setAcceptColor}/></label>
+          <button className="button primary full" disabled={busy||!account.emailVerified}>Rejoindre {preview.familyName}</button>
+        </form>
+      </>:<p className="muted">Recherche de l'invitation dans Firebase…</p>}
+      <button className="link" onClick={()=>{setInviteToken("");window.history.replaceState({},"",window.location.pathname);}}>Annuler</button>
+      {notice&&<Notice text={notice} onDismiss={()=>setNotice("")}/>}
+    </div>
+  </div>;
+
+  if(!familyId) return <div className="screen center">
+    <div className="panel compact">
+      <div className="logo"><Users size={34}/></div>
+      <h1>Créons votre famille</h1>
+      <p className="muted">Le premier adulte devient parent titulaire. Vous pouvez ensuite inviter un deuxième parent, quel que soit le modèle familial.</p>
+      <form className="stack" onSubmit={createFamily}>
+        <label>Nom du foyer<input required minLength={2} maxLength={80} placeholder="Notre tribu"
+          value={setupName} onChange={e=>setSetupName(e.target.value)}/></label>
+        <label>Votre prénom<input required minLength={2} maxLength={60}
+          value={setupFirstName} onChange={e=>setSetupFirstName(e.target.value)}/></label>
+        <label>Votre couleur<Colors value={setupColor} onChange={setSetupColor}/></label>
+        <button className="button primary full" disabled={busy} type="submit">Créer ma famille</button>
+      </form>
+      <div className="divider">ou</div>
+      <form onSubmit={e=>{e.preventDefault(); const v=(e.currentTarget.elements.namedItem("invite") as HTMLInputElement)?.value;parseInvitation(v);}} className="stack">
+        <label>Code ou lien d'invitation<input name="invite" required placeholder="Coller un lien reçu"/></label>
+        <button className="button secondary full">Rejoindre une famille</button>
+      </form>
+      <button className="link" onClick={()=>auth&&signOut(auth)}>Changer de compte</button>
+      {notice&&<Notice text={notice} onDismiss={()=>setNotice("")}/>}
+    </div>
+  </div>;
+
+  return <div className="app">
+    <header className="topbar"><div className="brand"><span className="brand-icon"><CalendarDays size={23}/></span>
+      <div><b>FamillePlanning</b><small>{family?.name||"Votre famille"}</small></div>
+    </div>
+      <div className="topbar-right"><span className="email">{account.displayName||account.email}</span>
+        <button title="Actualiser le foyer" className="icon-button" onClick={()=>refreshProfile(account)}><RefreshCw size={18}/></button>
+        <button title="Déconnexion" className="icon-button" onClick={()=>auth&&signOut(auth)}><LogOut size={18}/></button></div>
+    </header>
+    <main className="main">
+      <aside className="sidebar">
+        <div className="family-panel"><Users size={19}/><b>{family?.name||"Ma famille"}</b><small>{members.length} membre(s)</small></div>
+        <button className={"sidebar-button "+(tab==="planning"?"active":"")} onClick={()=>setTab("planning")}><CalendarDays size={19}/>Planning</button>
+        <button className={"sidebar-button "+(tab==="family"?"active":"")} onClick={()=>setTab("family")}><Users size={19}/>Ma famille</button>
+        <div className="sidebar-footer"><ShieldCheck size={17}/>Données privées et synchronisées</div>
+      </aside>
+      <section className="content">
+        {notice&&<Notice text={notice} onDismiss={()=>setNotice("")}/>}
+        {tab==="planning" ? <>
+          <div className="section-head"><div><p className="eyebrow">LE PLANNING PARTAGÉ</p><h1>Notre calendrier</h1></div>
+            <button className="button primary" onClick={()=>setEventOpen(true)}><Plus size={18}/>Ajouter un événement</button></div>
+          <div className="toolbar"><label>Choisir une journée<input type="date" value={day} onChange={e=>setDay(e.target.value)}/></label>
+            <button className="button secondary" onClick={()=>setDay(today())}>Aujourd'hui</button></div>
+          <div className="member-strip">{members.map(m=><div key={m.id} className="member-mini">
+            <EmojiAvatar name={m.firstName} color={m.color} size={36}/><span>{m.firstName}</span></div>)}</div>
+          <h2 className="day-title">{dateLabel(new Date(day+"T12:00:00"))}</h2>
+          {visibleEvents.length===0?<div className="empty"><CalendarDays size={38}/><b>Aucun rendez-vous</b><p>Ajoutez le premier événement de votre famille.</p></div>:
+            <div className="event-list">{visibleEvents.map(e=><article key={e.id} className="event">
+              <div className="event-time"><Clock size={15}/>{timeLabel(e.startAt)} · {timeLabel(e.endAt)}</div>
+              <h3>{e.title}</h3>{e.location&&<p>{e.location}</p>}
+              <div className="member-strip small">{e.participantIds.map(id=>{const m=members.find(m=>m.id===id);
+                return m?<span className="pill" key={id} style={{background:m.color+"22",color:m.color}}>{m.firstName}</span>:null;})}</div>
+            </article>)}</div>}
+        </> : <>
+          <div className="section-head"><div><p className="eyebrow">VOTRE TRIBU</p><h1>Ma famille</h1>
+            <p className="muted">{parentRoles.includes(role)?"Vous êtes parent titulaire.":"Vous faites partie de cette famille."}</p>
+            </div>
+          </div>
+          {isParent&&<div className="actions"><button className="button primary" onClick={()=>setChildOpen(true)}><Baby size={18}/>Ajouter un enfant</button>
+            <button className="button secondary" onClick={()=>setInviteOpen(true)}><Link2 size={18}/>Inviter un adulte</button></div>}
+          <div className="tile"><ShieldCheck size={20}/><div><b>Famille protégée</b><p>1 ou 2 parents titulaires. Les enfants ne se connectent pas et apparaissent uniquement dans votre planning.</p></div></div>
+          <div className="cards">{members.map(m=><div className="person-card" key={m.id}>
+            <EmojiAvatar name={m.firstName} color={m.color} size={52}/><div><b>{m.firstName}</b><small>{m.roleLabel}</small>
+              {m.isChild&&<small>Sans compte de connexion</small>}</div>
+          </div>)}</div>
+          <p className="footnote">{parentsCount}/2 parent(s) titulaire(s). La création d'un deuxième parent passe par une invitation sécurisée.</p>
+          {generatedLink&&<div className="panel link-panel"><h3>Invitation à partager</h3>
+            <p className="muted">Lien privé valable 48 h et utilisable une seule fois.</p>
+            <input readOnly value={generatedLink} onFocus={e=>e.target.select()}/>
+            <button className="button secondary" onClick={copyLink}><Copy size={17}/>Copier le lien</button>
+            {window.location.hostname==="localhost"&&<p className="error">Le site tourne en local : ce lien ne pourra pas être ouvert par quelqu'un d'autre avant publication sur un vrai domaine.</p>}
+          </div>}
+        </>}
+      </section>
+    </main>
+    <nav className="mobile-nav"><button className={tab==="planning"?"active":""} onClick={()=>setTab("planning")}><CalendarDays size={22}/>Planning</button>
+      <button className={tab==="family"?"active":""} onClick={()=>setTab("family")}><Users size={22}/>Ma famille</button></nav>
+
+    {childOpen&&<div className="overlay"><form className="panel modal" onSubmit={createChild}>
+      <h2>Ajouter un enfant</h2><p className="muted">Un prénom et une couleur suffisent. Aucun compte ni e-mail.</p>
+      <label>Prénom<input required minLength={2} maxLength={60} value={childName} onChange={e=>setChildName(e.target.value)}/></label>
+      <label>Naissance · facultatif<input type="date" value={childBirth} onChange={e=>setChildBirth(e.target.value)}/></label>
+      <label>Couleur<Colors value={childColor} onChange={setChildColor}/></label>
+      <div className="two-buttons"><button type="button" className="button secondary" onClick={()=>setChildOpen(false)}>Annuler</button>
+        <button disabled={busy} className="button primary">Ajouter</button></div>
+    </form></div>}
+
+    {inviteOpen&&<div className="overlay"><form className="panel modal" onSubmit={shareInvite}>
+      <h2>Inviter un adulte</h2><p className="muted">Lien à usage unique, valable 48 heures. Le destinataire crée ou retrouve son compte Google ou e-mail.</p>
+      <div className="role-options"><button type="button" onClick={()=>setInviteRole("adult")} className={inviteRole==="adult"?"selected":""}>
+        Adulte invité <small>Peut participer au planning</small></button>
+        <button type="button" disabled={parentsCount>=2} onClick={()=>setInviteRole("parent")} className={inviteRole==="parent"?"selected":""}>
+          Deuxième parent <small>Peut gérer les enfants et les invitations</small></button></div>
+      <label>Réserver à une adresse e-mail · facultatif<input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label>
+      <div className="two-buttons"><button type="button" className="button secondary" onClick={()=>setInviteOpen(false)}>Annuler</button>
+        <button disabled={busy} className="button primary">Créer le lien</button></div>
+    </form></div>}
+
+    {eventOpen&&<div className="overlay"><form className="panel modal" onSubmit={createEvent}>
+      <h2><CalendarPlus size={22}/>Nouveau rendez-vous</h2>
+      <label>Titre<input required minLength={2} maxLength={100} value={eventTitle} onChange={e=>setEventTitle(e.target.value)}/></label>
+      <label>Date<input type="date" value={day} onChange={e=>setDay(e.target.value)}/></label>
+      <div className="two-buttons"><label>Début<input type="time" required value={eventStart} onChange={e=>setEventStart(e.target.value)}/></label>
+        <label>Fin<input type="time" required value={eventEnd} onChange={e=>setEventEnd(e.target.value)}/></label></div>
+      <label>Lieu · facultatif<input value={eventLocation} onChange={e=>setEventLocation(e.target.value)}/></label>
+      <label>Qui participe ?</label><div className="member-strip wrap">{members.map(m=><label key={m.id} className="check-member">
+        <input type="checkbox" checked={participants.includes(m.id)} onChange={e=>setParticipants(v=>e.target.checked?[...v,m.id]:v.filter(id=>id!==m.id))}/>{m.firstName}</label>)}</div>
+      <div className="two-buttons"><button type="button" className="button secondary" onClick={()=>setEventOpen(false)}>Annuler</button>
+        <button disabled={busy} className="button primary">Enregistrer</button></div>
+    </form></div>}
+  </div>;
 }
