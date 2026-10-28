@@ -184,19 +184,18 @@ data class FamilyMember(
     val colorHex: String = "#FF6B6B",
     val roleName: String? = null,
     val isChild: Boolean = false,
-    val birthDate: String? = null
+    val birthDate: String? = null,
+    val role: String = "adult",
+    val userId: String? = null,
+    val hasAccount: Boolean = false
 ) {
-    /**
-     * Écriture canonique exacte Web
-     */
     fun toFirestoreMap(): Map<String, Any?> {
         return mapOf(
-            "name" to firstName,
-            "avatarUrl" to avatarUrl,
-            "color" to colorHex,
-            "role" to roleName,
-            "isChild" to isChild,
-            "birthDate" to birthDate
+            "name" to firstName, "avatarUrl" to avatarUrl,
+            "color" to colorHex, "role" to role,
+            "roleLabel" to roleName, "isChild" to isChild,
+            "birthDate" to birthDate, "userId" to userId,
+            "hasAccount" to hasAccount
         )
     }
 
@@ -206,16 +205,26 @@ data class FamilyMember(
                 ?: throw InvalidDocumentException("Champ obligatoire 'name' introuvable pour le membre $id")
 
             val color = map["color"] as? String ?: map["colorHex"] as? String ?: "#FF6B6B"
-            val role = map["role"] as? String ?: map["roleName"] as? String
+            val role = map["role"] as? String ?: "adult"
+            val roleLabel = map["roleLabel"] as? String
+                ?: map["roleName"] as? String
+                ?: when (role) {
+                    "parent", "owner", "admin" -> "Parent titulaire"
+                    "child" -> "Enfant"
+                    else -> "Adulte"
+                }
 
             return FamilyMember(
                 id = id,
                 firstName = name,
                 avatarUrl = map["avatarUrl"] as? String ?: map["photoUrl"] as? String,
                 colorHex = color,
-                roleName = role,
-                isChild = map["isChild"] as? Boolean ?: (map["type"] == "child"),
-                birthDate = map["birthDate"] as? String
+                roleName = roleLabel,
+                isChild = map["isChild"] as? Boolean ?: (role == "child" || map["type"] == "child"),
+                birthDate = map["birthDate"] as? String,
+                role = role,
+                userId = map["userId"] as? String,
+                hasAccount = map["hasAccount"] as? Boolean ?: (map["userId"] is String)
             )
         }
     }

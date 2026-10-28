@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import fr.familleplanning.app.data.models.Family
 import fr.familleplanning.app.data.models.FamilyAccess
 import fr.familleplanning.app.data.models.FamilyMember
@@ -20,7 +21,8 @@ import kotlinx.coroutines.tasks.await
  * - Ne pas créer de famille fictive dans Firestore.
  */
 class FamilyRepository(
-    private val firestore: FirebaseFirestore = FirebaseManager.getFirestore()
+    private val firestore: FirebaseFirestore = FirebaseManager.getFirestore(),
+    private val functions: FirebaseFunctions = FirebaseFunctions.getInstance("europe-west9")
 ) {
 
     /**
@@ -98,6 +100,62 @@ class FamilyRepository(
             Log.e("FamilyRepository", "Création du foyer refusée (vérifier les règles Firestore de la base nommée)", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Les opérations sensibles sont traitées côté serveur sur la base Firestore nommée.
+     * L'interface ne peut jamais s'attribuer localement un rôle de parent.
+     */
+    suspend fun addChild(
+        familyId: String, firstName: String, birthDate: String?, color: String
+    ): Result<String> = try {
+        val result = functions.getHttpsCallable("addFamilyChild").call(
+            mapOf("familyId" to familyId, "firstName" to firstName,
+                "birthDate" to (birthDate?.takeIf { it.isNotBlank() }),
+                "color" to color)
+        ).await()
+        val memberId = (result.data as? Map<*, *>)?.get("memberId") as? String
+            ?: throw IllegalStateException("Réponse serveur incomplète")
+        Result.success(memberId)
+    } catch (e: Exception) {
+        Log.e("FamilyRepository", "Ajout d'enfant impossible", e)
+        Result.failure(e)
+    }
+
+    suspend fun createInvite(
+        familyId: String, role: String, email: String?
+    ): Result<String> = try {
+        val response = functions.getHttpsCallable("createFamilyInvite").call(
+            mapOf("familyId" to familyId, "role" to role,
+                "email" to (email?.takeIf { it.isNotBlank() }))
+        ).await()
+        val token = (response.data as? Map<*, *>)?.get("token") as? String
+            ?: throw IllegalStateException("Invitation introuvable dans la réponse du serveur")
+        Result.success(token)
+    } catch (e: Exception) {
+        Log.e("FamilyRepository", "Impossible de créer le lien", e)
+        Result.failure(e)
+    }
+
+    suspend fun previewInvite(token: String): Result<String> = try {
+        val response = functions.getHttpsCallable("previewFamilyInvite")
+            .call(mapOf("token" to token)).await()
+        val data = response.data as? Map<*, *>
+        Result.success(data?.get("familyName") as? String ?: "Famille")
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun acceptInvite(
+        token: String, firstName: String, color: String
+    ): Result<String> = try {
+        val response = functions.getHttpsCallable("acceptFamilyInvite")
+            .call(mapOf("token" to token, "firstName" to firstName, "color" to color)).await()
+        val familyId = (response.data as? Map<*, *>)?.get("familyId") as? String
+            ?: throw IllegalStateException("Réponse serveur incomplète")
+        Result.success(familyId)
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     /**

@@ -13,8 +13,8 @@ android {
         applicationId = "fr.familleplanning.app"
         minSdk = 26 // Android 8.0+ for modern java.time support (LocalDate, LocalTime, Instant)
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0-phase3a"
+        versionCode = 2
+        versionName = "1.1.0-famille"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -88,6 +88,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-functions")
 
     // Google Play Services Auth for Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.2.0")
