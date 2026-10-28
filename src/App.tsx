@@ -161,7 +161,7 @@ export default function App() {
     e.preventDefault();
     if(!familyId)return;
     await run(async()=>{
-      await addChild(familyId,childName,childBirth||null,childColor);
+      await addChild(familyId,account!.uid,childName,childBirth||null,childColor);
       setChildOpen(false);setChildName("");setChildBirth("");
       setNotice("L'enfant apparaît dans la famille et dans les filtres du planning.");
     });

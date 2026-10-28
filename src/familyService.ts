@@ -160,9 +160,36 @@ async function invoke<P,R>(name:string, payload:P):Promise<R> {
   const result=await run(payload);
   return result.data;
 }
-export const addChild = (familyId:string,firstName:string,birthDate:string|null,color:string) =>
-  invoke<{familyId:string,firstName:string,birthDate:string|null,color:string},{memberId:string}>(
-    "addFamilyChild",{familyId,firstName,birthDate,color});
+export async function addChild(
+  familyId:string, uid:string, firstName:string, birthDate:string|null, color:string
+):Promise<{memberId:string}> {
+  const home = await getHome(familyId);
+  const name = firstName.trim();
+  if (name.length < 2 || name.length > 60 || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    throw new Error("Prénom ou couleur invalide.");
+  }
+  if (birthDate) {
+    const date = new Date(birthDate+"T00:00:00Z");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+        !Number.isFinite(date.getTime()) ||
+        date.toISOString().slice(0,10) !== birthDate ||
+        date.getTime() > Date.now()) {
+      throw new Error("Date de naissance invalide.");
+    }
+  }
+  if (home.ownerId === uid) {
+    // Règles Firestore côté serveur : seuls les administrateurs peuvent créer.
+    const ref = doc(collection(database(),"families",familyId,"members"));
+    await setDoc(ref,{
+      name,role:"child",roleLabel:"Enfant",isChild:true,
+      hasAccount:false,userId:null,birthDate,color,
+      createdBy:uid,createdAt:serverTimestamp()
+    });
+    return {memberId:ref.id};
+  }
+  return invoke<{familyId:string,firstName:string,birthDate:string|null,color:string},{memberId:string}>(
+    "addFamilyChild",{familyId,firstName:name,birthDate,color});
+}
 export const createInvite = (familyId:string,role:"parent"|"adult",email:string|null) =>
   invoke<{familyId:string,role:string,email:string|null},{token:string,expiresAt:string}>(
     "createFamilyInvite",{familyId,role,email});

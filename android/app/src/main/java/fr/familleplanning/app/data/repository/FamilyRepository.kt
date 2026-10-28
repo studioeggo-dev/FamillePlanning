@@ -109,14 +109,46 @@ class FamilyRepository(
     suspend fun addChild(
         familyId: String, firstName: String, birthDate: String?, color: String
     ): Result<String> = try {
-        val result = functions.getHttpsCallable("addFamilyChild").call(
-            mapOf("familyId" to familyId, "firstName" to firstName,
-                "birthDate" to (birthDate?.takeIf { it.isNotBlank() }),
-                "color" to color)
-        ).await()
-        val memberId = (result.getData() as? Map<*, *>)?.get("memberId") as? String
-            ?: throw IllegalStateException("Réponse serveur incomplète")
-        Result.success(memberId)
+        val uid = FirebaseManager.getAuth().currentUser?.uid
+            ?: throw IllegalStateException("Connecte-toi pour ajouter un enfant.")
+        val name = firstName.trim()
+        require(name.length in 2..60) { "Le prénom doit contenir entre 2 et 60 caractères." }
+        require(Regex("^#[0-9A-Fa-f]{6}$").matches(color)) { "Couleur invalide." }
+        val normalizedBirthDate = birthDate?.trim()?.takeIf { it.isNotBlank() }
+        if (normalizedBirthDate != null) {
+            val date = java.time.LocalDate.parse(normalizedBirthDate)
+            require(!date.isAfter(java.time.LocalDate.now()) && date.year >= 1900) {
+                "Date de naissance invalide."
+            }
+        }
+
+        val familyDoc = firestore.collection("families").document(familyId).get().await()
+        if (!familyDoc.exists()) throw IllegalStateException("Famille introuvable.")
+        // Le fondateur peut ajouter un enfant immédiatement avec les règles
+        // Firestore déployées : aucun backend Cloud Functions requis pour lui.
+        // Firestore vérifie réellement son autorisation d'administrateur.
+        if (familyDoc.getString("ownerId") == uid) {
+            val ref = firestore.collection("families").document(familyId)
+                .collection("members").document()
+            ref.set(mapOf(
+                "name" to name, "color" to color, "role" to "child",
+                "roleLabel" to "Enfant", "isChild" to true,
+                "hasAccount" to false, "userId" to null,
+                "birthDate" to normalizedBirthDate,
+                "createdBy" to uid,
+                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )).await()
+            Result.success(ref.id)
+        } else {
+            // La validation du deuxième titulaire se fait côté Cloud Functions.
+            val result = functions.getHttpsCallable("addFamilyChild").call(
+                mapOf("familyId" to familyId, "firstName" to name,
+                    "birthDate" to normalizedBirthDate, "color" to color)
+            ).await()
+            val memberId = (result.getData() as? Map<*, *>)?.get("memberId") as? String
+                ?: throw IllegalStateException("Réponse serveur incomplète")
+            Result.success(memberId)
+        }
     } catch (e: Exception) {
         Log.e("FamilyRepository", "Ajout d'enfant impossible", e)
         Result.failure(e)
