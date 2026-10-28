@@ -220,8 +220,9 @@ fun FamilyScreen(
             title = { Text("Invitation créée") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Ce lien s'ouvre sur Android. Pour le Web, le code peut être saisi sur la page « Rejoindre une famille ».")
+                    Text("Partagez ce lien avec un adulte. S'il ne s'ouvre pas directement, il peut copier le code dans « Rejoindre une famille ».")
                     Text(deepLink, style = MaterialTheme.typography.bodySmall)
+                    Text("Code d'invitation : ${inviteToken}", style = MaterialTheme.typography.bodySmall)
                     Text("À usage unique · expiration après 48 heures.", color = TextSecondary)
                 }
             },
@@ -229,7 +230,7 @@ fun FamilyScreen(
                 TextButton(onClick = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "Rejoins notre FamillePlanning : ${deepLink}")
+                        putExtra(Intent.EXTRA_TEXT, "Rejoins notre FamillePlanning !\nLien : ${deepLink}\nCode : ${inviteToken}\nSi le lien ne s'ouvre pas, lance FamillePlanning et colle le code dans « Rejoindre une famille ».")
                     }
                     context.startActivity(Intent.createChooser(intent, "Envoyer l'invitation"))
                     onDismissInvite()

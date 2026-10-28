@@ -50,10 +50,12 @@ fun FamilySetupScreen(
     creationState: FamilyCreationState,
     onCreateFamily: (String, String, String) -> Unit,
     onRefreshProfile: () -> Unit,
+    onUseInviteCode: (String) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var familyName by rememberSaveable { mutableStateOf("") }
+    var inviteCode by rememberSaveable { mutableStateOf("") }
     var firstName by rememberSaveable { mutableStateOf("") }
     var selectedColor by rememberSaveable { mutableStateOf("#FF6B6B") }
     val colors = listOf("#FF6B6B", "#48DBFB", "#1DD1A1", "#FECA57", "#A55EEA", "#FF9F43")
@@ -141,6 +143,41 @@ fun FamilySetupScreen(
                 textAlign = TextAlign.Center,
                 color = TextSecondary
             )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Vous avez reçu une invitation ?",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary
+            )
+            OutlinedTextField(
+                value = inviteCode,
+                onValueChange = { inviteCode = it.take(500) },
+                label = { Text("Coller le code ou le lien reçu") },
+                singleLine = true,
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            )
+            OutlinedButton(
+                onClick = {
+                    val code = inviteCode.trim().let { raw ->
+                        val queryCode = raw.substringAfter("token=", "")
+                            .substringBefore("&").substringBefore("#")
+                        when {
+                            queryCode.isNotBlank() -> queryCode
+                            raw.contains("invite=") ->
+                                raw.substringAfter("invite=").substringBefore("&").substringBefore("#")
+                            else -> raw
+                        }
+                    }
+                    onUseInviteCode(code)
+                },
+                enabled = !saving && inviteCode.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Rejoindre la famille avec mon invitation")
+            }
+
             OutlinedButton(onClick = onRefreshProfile, enabled = !saving) {
                 Text("Retrouver ma famille")
             }

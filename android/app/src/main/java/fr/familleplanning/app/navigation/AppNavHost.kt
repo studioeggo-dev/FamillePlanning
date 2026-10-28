@@ -198,6 +198,7 @@ fun AppNavHost(
                         authViewModel.createFamily(name, firstName, color)
                     },
                     onRefreshProfile = { authViewModel.refreshProfile() },
+                    onUseInviteCode = { token -> authViewModel.setPendingInvite(token) },
                     onSignOut = {
                         planningViewModel.stopSync()
                         authViewModel.signOut()
