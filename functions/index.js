@@ -124,18 +124,26 @@ exports.acceptFamilyInvite = onCall(options, async (request) => {
       const userRef = db.collection("users").doc(uid);
       const membershipRef = accessRef(data.familyId, uid);
       const membersRef = familyRef.collection("members");
+      const secondSeat = familyRef.collection("parentSlots").doc("second");
       const holderQuery = familyRef.collection("access").where("role", "in", ["owner", "parent", "admin"]);
       // All reads are before the first transaction write.
-      const [family, user, access, holders] = await Promise.all([
-        tx.get(familyRef), tx.get(userRef), tx.get(membershipRef), tx.get(holderQuery)
+      const [family, user, access, holders, reservedSeat] = await Promise.all([
+        tx.get(familyRef), tx.get(userRef), tx.get(membershipRef),
+        tx.get(holderQuery), tx.get(secondSeat)
       ]);
       if (!family.exists) throw new HttpsError("not-found", "Famille introuvable.");
       if (access.exists) throw new HttpsError("already-exists", "Tu fais déjà partie de cette famille.");
-      if (data.role === "parent" && isFullHolderGroup(holders.docs.map(d=>d.get("role")))) {
+      if (data.role === "parent" &&
+          (reservedSeat.exists || isFullHolderGroup(holders.docs.map(d=>d.get("role"))))) {
         throw new HttpsError("failed-precondition", "Cette famille possède déjà deux parents titulaires.");
       }
       const memberRef = membersRef.doc();
       const now = FieldValue.serverTimestamp();
+      // One document for the second-holder slot prevents concurrent invitations
+      // from enrolling two second parents (transaction read/write conflict).
+      if (data.role === "parent") {
+        tx.create(secondSeat, {uid, createdAt:now});
+      }
       tx.create(membershipRef, {role: data.role, joinedAt: now, invitedBy: data.createdBy});
       tx.create(memberRef, {
         name, userId: uid, role: data.role, roleLabel: data.role === "parent" ? "Parent titulaire" : "Adulte",
