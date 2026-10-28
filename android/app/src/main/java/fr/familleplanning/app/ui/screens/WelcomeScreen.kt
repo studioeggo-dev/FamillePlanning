@@ -48,6 +48,7 @@ import fr.familleplanning.app.viewmodel.AuthUiState
 fun WelcomeScreen(
     uiState: AuthUiState,
     onSignInWithGoogleClick: () -> Unit,
+    onSignInWithEmailClick: () -> Unit,
     onContinueToAppClick: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier
@@ -180,6 +181,16 @@ fun WelcomeScreen(
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = onSignInWithEmailClick,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text("Connexion ou inscription par e-mail",
+                                fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Pour les deux options, choisissez votre compte Google. Un compte FamillePlanning est créé automatiquement lors de la première connexion.",
@@ -241,10 +252,18 @@ fun WelcomeScreen(
                             if (uiState.profile == null || uiState.profile.activeFamilyId.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Votre compte Google est connecté. Créez votre famille pour commencer votre véritable planning partagé.",
+                                    text = "Votre compte est connecté. Créez votre famille ou acceptez une invitation pour rejoindre un foyer.",
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Center,
                                     color = TextSecondary
+                                )
+                            }
+
+                            if (!uiState.firebaseUser.isEmailVerified) {
+                                Text(
+                                    "Adresse e-mail à vérifier avant de rejoindre ou de créer une famille.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = CoralPrimary
                                 )
                             }
 

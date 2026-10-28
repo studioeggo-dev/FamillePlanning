@@ -22,6 +22,14 @@ sealed class AuthUiState {
     data class Error(val message: String) : AuthUiState()
 }
 
+sealed class InviteUiState {
+    object Idle : InviteUiState()
+    object Loading : InviteUiState()
+    data class Preview(val familyName: String) : InviteUiState()
+    data class Error(val message: String) : InviteUiState()
+    object Accepted : InviteUiState()
+}
+
 sealed class FamilyCreationState {
     object Idle : FamilyCreationState()
     object Saving : FamilyCreationState()
@@ -38,6 +46,91 @@ class AuthViewModel(
 
     private val _familyCreationState = MutableStateFlow<FamilyCreationState>(FamilyCreationState.Idle)
     val familyCreationState: StateFlow<FamilyCreationState> = _familyCreationState.asStateFlow()
+
+    private val _pendingInviteToken = MutableStateFlow<String?>(null)
+    val pendingInviteToken: StateFlow<String?> = _pendingInviteToken.asStateFlow()
+    private val _inviteUiState = MutableStateFlow<InviteUiState>(InviteUiState.Idle)
+    val inviteUiState: StateFlow<InviteUiState> = _inviteUiState.asStateFlow()
+
+    fun setPendingInvite(token: String) {
+        if (!Regex("^[A-Za-z0-9_-]{43}$").matches(token)) {
+            _inviteUiState.value = InviteUiState.Error("Ce lien d'invitation est invalide.")
+            return
+        }
+        _pendingInviteToken.value = token
+        _inviteUiState.value = InviteUiState.Idle
+    }
+
+    fun cancelInvitation() {
+        _pendingInviteToken.value = null
+        _inviteUiState.value = InviteUiState.Idle
+    }
+
+    fun previewInvitation() {
+        val token = _pendingInviteToken.value ?: return
+        if (_uiState.value !is AuthUiState.Authenticated) return
+        _inviteUiState.value = InviteUiState.Loading
+        viewModelScope.launch {
+            familyRepository.previewInvite(token)
+                .onSuccess { _inviteUiState.value = InviteUiState.Preview(it) }
+                .onFailure {
+                    _inviteUiState.value = InviteUiState.Error(
+                        "Impossible de lire cette invitation : ${it.localizedMessage ?: "fonction Firebase non disponible"}"
+                    )
+                }
+        }
+    }
+
+    fun acceptInvitation(firstName: String, color: String) {
+        val token = _pendingInviteToken.value ?: return
+        val auth = _uiState.value as? AuthUiState.Authenticated ?: return
+        if (!auth.firebaseUser.isEmailVerified) {
+            _inviteUiState.value = InviteUiState.Error(
+                "Vérifie ton adresse e-mail avant de rejoindre cette famille."
+            )
+            return
+        }
+        _inviteUiState.value = InviteUiState.Loading
+        viewModelScope.launch {
+            familyRepository.acceptInvite(token, firstName, color)
+                .onSuccess {
+                    _pendingInviteToken.value = null
+                    loadProfile(auth.firebaseUser)
+                    _inviteUiState.value = InviteUiState.Accepted
+                }
+                .onFailure {
+                    _inviteUiState.value = InviteUiState.Error(
+                        "Invitation refusée : ${it.localizedMessage ?: "réessaie"}"
+                    )
+                }
+        }
+    }
+
+    fun signInWithEmail(email: String, password: String, register: Boolean) {
+        _uiState.value = AuthUiState.Loading
+        viewModelScope.launch {
+            authRepository.signInWithEmail(email, password, register)
+                .onSuccess { user -> loadProfile(user) }
+                .onFailure { error ->
+                    _uiState.value = AuthUiState.Error(
+                        error.localizedMessage ?: "Impossible de se connecter par e-mail."
+                    )
+                }
+        }
+    }
+
+    fun refreshEmailVerification() {
+        val previous = _uiState.value as? AuthUiState.Authenticated ?: return
+        viewModelScope.launch {
+            authRepository.reloadCurrentUser().onSuccess {
+                _uiState.value = previous.copy(firebaseUser = it)
+            }.onFailure {
+                _inviteUiState.value = InviteUiState.Error(
+                    "Impossible de vérifier l'adresse e-mail. Réessaie."
+                )
+            }
+        }
+    }
 
     init {
         // Restauration automatique de session au démarrage
@@ -108,6 +201,12 @@ class AuthViewModel(
             )
             return
         }
+        if (!auth.firebaseUser.isEmailVerified) {
+            _familyCreationState.value = FamilyCreationState.Error(
+                "Vérifie ton adresse e-mail avant de créer une famille."
+            )
+            return
+        }
         _familyCreationState.value = FamilyCreationState.Saving
         viewModelScope.launch {
             val result = familyRepository.createFirstFamily(auth.firebaseUser, familyName, memberName, color)
@@ -137,6 +236,8 @@ class AuthViewModel(
 
     fun signOut() {
         authRepository.signOut()
+        _pendingInviteToken.value = null
+        _inviteUiState.value = InviteUiState.Idle
         _familyCreationState.value = FamilyCreationState.Idle
         _uiState.value = AuthUiState.Idle
     }

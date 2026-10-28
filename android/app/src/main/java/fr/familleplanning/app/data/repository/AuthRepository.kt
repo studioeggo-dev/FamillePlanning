@@ -45,6 +45,29 @@ class AuthRepository(
         }
     }
 
+    suspend fun signInWithEmail(email: String, password: String, register: Boolean): Result<FirebaseUser> {
+        return try {
+            require(email.trim().isNotBlank() && password.length >= 6) {
+                "Saisissez une adresse e-mail et un mot de passe d'au moins 6 caractères."
+            }
+            val result = if (register) auth.createUserWithEmailAndPassword(email.trim(), password).await()
+                else auth.signInWithEmailAndPassword(email.trim(), password).await()
+            val user = result.user ?: throw IllegalStateException("Compte introuvable")
+            if (register) user.sendEmailVerification().await()
+            Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reloadCurrentUser(): Result<FirebaseUser> = try {
+        val user = auth.currentUser ?: throw IllegalStateException("Aucun compte connecté")
+        user.reload().await()
+        Result.success(auth.currentUser ?: user)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
     /**
      * Récupère le document profil utilisateur depuis Cloud Firestore: users/{uid}
      */

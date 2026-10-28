@@ -2,6 +2,7 @@ package fr.familleplanning.app
 
 import android.os.Bundle
 import android.app.Activity
+import android.content.Intent
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -65,6 +66,20 @@ class MainActivity : ComponentActivity() {
                     onTriggerGoogleSignIn = { launchGoogleSignIn() }
                 )
             }
+        }
+        handleInviteIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleInviteIntent(intent)
+    }
+
+    private fun handleInviteIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "familleplanning" && uri.host == "invite") {
+            uri.getQueryParameter("token")?.let { authViewModel.setPendingInvite(it) }
         }
     }
 

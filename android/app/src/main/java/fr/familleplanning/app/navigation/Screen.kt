@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Screen(val route: String, val title: String = "", val icon: ImageVector? = null) {
     object Welcome : Screen("welcome", "Bienvenue")
     object FamilySetup : Screen("family_setup", "Créer ma famille")
+    object EmailAuth : Screen("email_auth", "Connexion e-mail")
+    object Invite : Screen("invite", "Rejoindre une famille")
     object Planning : Screen("planning", "Planning", Icons.Rounded.CalendarMonth)
     object Family : Screen("family", "Ma famille", Icons.Rounded.Group)
     object Settings : Screen("settings", "Paramètres", Icons.Rounded.Settings)
