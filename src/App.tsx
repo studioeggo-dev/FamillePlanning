@@ -148,6 +148,10 @@ export default function App() {
     e.preventDefault();
     if(!account)return;
     await run(async()=>{
+      await reload(account);
+      if (!account.emailVerified) {
+        throw new Error("Vérifiez d'abord votre adresse e-mail avant de créer une famille.");
+      }
       await createFirstFamily(account,setupName,setupFirstName,setupColor);
       await refreshProfile(account);
       setNotice("Votre famille est créée et synchronisée !");
@@ -255,6 +259,9 @@ export default function App() {
       {preview ? <>
         <div className="highlight"><b>{preview.familyName}</b><br/>Vous rejoindrez ce foyer comme {preview.role==="parent"?"second parent titulaire":"adulte invité"}.</div>
         {!account.emailVerified&&<p className="error">Adresse e-mail non vérifiée. Ouvrez le message de vérification reçu ou reconnectez-vous après l'avoir validée.</p>}
+        <a className="button secondary full" href={"familleplanning://invite?token="+encodeURIComponent(inviteToken)}>
+          Ouvrir dans l'application Android
+        </a>
         <form onSubmit={accept} className="stack">
           <label>Votre prénom<input required minLength={2} maxLength={60} value={acceptName} onChange={e=>setAcceptName(e.target.value)}/></label>
           <label>Couleur personnelle<Colors value={acceptColor} onChange={setAcceptColor}/></label>
@@ -271,13 +278,24 @@ export default function App() {
       <div className="logo"><Users size={34}/></div>
       <h1>Créons votre famille</h1>
       <p className="muted">Le premier adulte devient parent titulaire. Vous pouvez ensuite inviter un deuxième parent, quel que soit le modèle familial.</p>
+      {!account.emailVerified&&<div className="highlight">
+        <b>Vérifiez votre adresse e-mail</b>
+        <p>Consultez le message de validation envoyé à {account.email}. La création est réservée aux comptes vérifiés.</p>
+        <button className="button secondary" onClick={()=>run(async()=>{
+          await reload(account);
+          setNotice(account.emailVerified?"Adresse validée. Vous pouvez continuer.":"Adresse toujours non vérifiée. Ouvrez votre e-mail de vérification.");
+        })}>J'ai vérifié mon e-mail</button>
+        <button className="link" onClick={()=>run(async()=>{await sendEmailVerification(account);setNotice("Un nouvel e-mail de vérification a été envoyé.");})}>
+          Renvoyer l'e-mail
+        </button>
+      </div>}
       <form className="stack" onSubmit={createFamily}>
         <label>Nom du foyer<input required minLength={2} maxLength={80} placeholder="Notre tribu"
           value={setupName} onChange={e=>setSetupName(e.target.value)}/></label>
         <label>Votre prénom<input required minLength={2} maxLength={60}
           value={setupFirstName} onChange={e=>setSetupFirstName(e.target.value)}/></label>
         <label>Votre couleur<Colors value={setupColor} onChange={setSetupColor}/></label>
-        <button className="button primary full" disabled={busy} type="submit">Créer ma famille</button>
+        <button className="button primary full" disabled={busy||!account.emailVerified} type="submit">Créer ma famille</button>
       </form>
       <div className="divider">ou</div>
       <form onSubmit={e=>{e.preventDefault(); const v=(e.currentTarget.elements.namedItem("invite") as HTMLInputElement)?.value;parseInvitation(v);}} className="stack">
