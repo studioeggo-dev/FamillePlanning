@@ -114,7 +114,7 @@ class FamilyRepository(
                 "birthDate" to (birthDate?.takeIf { it.isNotBlank() }),
                 "color" to color)
         ).await()
-        val memberId = (result.data as? Map<*, *>)?.get("memberId") as? String
+        val memberId = (result.getData() as? Map<*, *>)?.get("memberId") as? String
             ?: throw IllegalStateException("Réponse serveur incomplète")
         Result.success(memberId)
     } catch (e: Exception) {
@@ -129,7 +129,7 @@ class FamilyRepository(
             mapOf("familyId" to familyId, "role" to role,
                 "email" to (email?.takeIf { it.isNotBlank() }))
         ).await()
-        val token = (response.data as? Map<*, *>)?.get("token") as? String
+        val token = (response.getData() as? Map<*, *>)?.get("token") as? String
             ?: throw IllegalStateException("Invitation introuvable dans la réponse du serveur")
         Result.success(token)
     } catch (e: Exception) {
@@ -140,7 +140,7 @@ class FamilyRepository(
     suspend fun previewInvite(token: String): Result<String> = try {
         val response = functions.getHttpsCallable("previewFamilyInvite")
             .call(mapOf("token" to token)).await()
-        val data = response.data as? Map<*, *>
+        val data = response.getData() as? Map<*, *>
         Result.success(data?.get("familyName") as? String ?: "Famille")
     } catch (e: Exception) {
         Result.failure(e)
@@ -151,7 +151,7 @@ class FamilyRepository(
     ): Result<String> = try {
         val response = functions.getHttpsCallable("acceptFamilyInvite")
             .call(mapOf("token" to token, "firstName" to firstName, "color" to color)).await()
-        val familyId = (response.data as? Map<*, *>)?.get("familyId") as? String
+        val familyId = (response.getData() as? Map<*, *>)?.get("familyId") as? String
             ?: throw IllegalStateException("Réponse serveur incomplète")
         Result.success(familyId)
     } catch (e: Exception) {
