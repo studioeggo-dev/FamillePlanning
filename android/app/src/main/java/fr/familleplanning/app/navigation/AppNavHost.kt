@@ -15,6 +15,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fr.familleplanning.app.ui.components.AppBottomBar
+import fr.familleplanning.app.ui.screens.EmailAuthScreen
+import fr.familleplanning.app.ui.screens.InviteScreen
 import fr.familleplanning.app.ui.screens.FamilyScreen
 import fr.familleplanning.app.ui.screens.FamilySetupScreen
 import fr.familleplanning.app.ui.screens.PlanningScreen
@@ -48,6 +50,8 @@ fun AppNavHost(
     val familyOperationBusy by familyViewModel.operationBusy.collectAsState()
     val familyOperationMessage by familyViewModel.operationMessage.collectAsState()
     val inviteToken by familyViewModel.inviteToken.collectAsState()
+    val pendingInvitationToken by authViewModel.pendingInviteToken.collectAsState()
+    val inviteUiState by authViewModel.inviteUiState.collectAsState()
 
     val authenticated = authState as? AuthUiState.Authenticated
     val activeFamilyId = authenticated?.profile?.activeFamilyId
@@ -63,12 +67,30 @@ fun AppNavHost(
         }
     }
 
-    LaunchedEffect(authenticated?.firebaseUser?.uid, activeFamilyId, currentRoute) {
-        if (!activeFamilyId.isNullOrBlank() && currentRoute == Screen.FamilySetup.route) {
+    LaunchedEffect(pendingInvitationToken, authenticated?.firebaseUser?.uid, activeFamilyId, currentRoute) {
+        if (!pendingInvitationToken.isNullOrBlank() && authenticated != null &&
+            currentRoute != Screen.Invite.route) {
+            navController.navigate(Screen.Invite.route) { launchSingleTop = true }
+        } else if (pendingInvitationToken.isNullOrBlank() &&
+            !activeFamilyId.isNullOrBlank() &&
+            currentRoute in listOf(Screen.FamilySetup.route, Screen.Invite.route, Screen.EmailAuth.route)) {
             navController.navigate(Screen.Planning.route) {
-                popUpTo(Screen.FamilySetup.route) { inclusive = true }
+                popUpTo(Screen.Welcome.route) { inclusive = true }
                 launchSingleTop = true
             }
+        } else if (authenticated != null && currentRoute == Screen.EmailAuth.route) {
+            navController.navigate(
+                if (activeFamilyId.isNullOrBlank()) Screen.FamilySetup.route else Screen.Planning.route
+            ) {
+                popUpTo(Screen.EmailAuth.route) { inclusive = true }
+            }
+        }
+    }
+
+    LaunchedEffect(pendingInvitationToken, currentRoute, authenticated?.firebaseUser?.uid) {
+        if (currentRoute == Screen.Invite.route && authenticated != null &&
+            !pendingInvitationToken.isNullOrBlank()) {
+            authViewModel.previewInvitation()
         }
     }
 
@@ -91,7 +113,9 @@ fun AppNavHost(
         else -> emptyList()
     }
 
-    val showBottomBar = currentRoute != Screen.Welcome.route && currentRoute != Screen.FamilySetup.route
+    val showBottomBar = currentRoute !in listOf(
+        Screen.Welcome.route, Screen.FamilySetup.route, Screen.EmailAuth.route, Screen.Invite.route
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -120,8 +144,13 @@ fun AppNavHost(
                 WelcomeScreen(
                     uiState = authState,
                     onSignInWithGoogleClick = onTriggerGoogleSignIn,
+                    onSignInWithEmailClick = { navController.navigate(Screen.EmailAuth.route) },
                     onContinueToAppClick = {
-                        val destination = if (activeFamilyId.isNullOrBlank()) Screen.FamilySetup else Screen.Planning
+                        val destination = when {
+                            !pendingInvitationToken.isNullOrBlank() -> Screen.Invite
+                            activeFamilyId.isNullOrBlank() -> Screen.FamilySetup
+                            else -> Screen.Planning
+                        }
                         if (authenticated != null) {
                             navController.navigate(destination.route) {
                                 popUpTo(Screen.Welcome.route) { inclusive = true }
@@ -129,6 +158,35 @@ fun AppNavHost(
                         }
                     },
                     onDismissError = { authViewModel.dismissError() }
+                )
+            }
+
+            composable(Screen.EmailAuth.route) {
+                EmailAuthScreen(
+                    uiState = authState,
+                    onSubmit = { email, password, register ->
+                        authViewModel.signInWithEmail(email, password, register)
+                    },
+                    onBack = {
+                        authViewModel.dismissError()
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(Screen.Invite.route) {
+                InviteScreen(
+                    uiState = inviteUiState,
+                    emailVerified = authenticated?.firebaseUser?.isEmailVerified == true,
+                    onRefresh = { authViewModel.previewInvitation() },
+                    onCheckEmail = { authViewModel.refreshEmailVerification() },
+                    onAccept = { name, color -> authViewModel.acceptInvitation(name, color) },
+                    onCancel = {
+                        authViewModel.cancelInvitation()
+                        navController.navigate(
+                            if (activeFamilyId.isNullOrBlank()) Screen.FamilySetup.route else Screen.Planning.route
+                        ) { popUpTo(Screen.Invite.route) { inclusive = true } }
+                    }
                 )
             }
 
