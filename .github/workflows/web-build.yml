@@ -1,0 +1,40 @@
+name: Web Firebase build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/web-build.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/web-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'package.json'
+      - name: Install web dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate TypeScript
+        run: npm run lint
+      - name: Build production bundle
+        run: npm run build
