@@ -190,21 +190,6 @@ fun WelcomeScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Bouton découverte locale pour la démonstration
-                        OutlinedButton(
-                            onClick = onContinueToAppClick,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(18.dp)
-                        ) {
-                            Text(
-                                text = "Explorer le planning",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
-                            )
-                        }
                     }
 
                     is AuthUiState.Loading -> {

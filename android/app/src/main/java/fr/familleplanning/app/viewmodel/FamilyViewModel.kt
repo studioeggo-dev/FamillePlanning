@@ -32,18 +32,6 @@ class FamilyViewModel(
         _uiState.value = FamilyUiState.NoFamily
     }
 
-    fun loadDemoFamily() {
-        _uiState.value = FamilyUiState.Success(
-            family = Family(
-                id = "local_demo_family",
-                name = "Famille Martin",
-                timezone = "Europe/Paris"
-            ),
-            members = getDemoFamilyMembers(),
-            isRemoteSource = false
-        )
-    }
-
     fun loadFamilyData(familyId: String?) {
         _uiState.value = FamilyUiState.Loading
 
@@ -78,38 +66,4 @@ class FamilyViewModel(
         }
     }
 
-    private fun getDemoFamilyMembers(): List<FamilyMember> {
-        return listOf(
-            FamilyMember(
-                id = "member_sophie",
-                firstName = "Sophie",
-                roleName = "Maman",
-                colorHex = "#FF6B6B",
-                isChild = false
-            ),
-            FamilyMember(
-                id = "member_thomas",
-                firstName = "Thomas",
-                roleName = "Papa",
-                colorHex = "#48DBFB",
-                isChild = false
-            ),
-            FamilyMember(
-                id = "member_emma",
-                firstName = "Emma",
-                roleName = "Fille aînée",
-                colorHex = "#A55EEA",
-                isChild = true,
-                birthDate = "2015-04-12"
-            ),
-            FamilyMember(
-                id = "member_leo",
-                firstName = "Léo",
-                roleName = "Cadet",
-                colorHex = "#1DD1A1",
-                isChild = true,
-                birthDate = "2019-09-28"
-            )
-        )
-    }
 }

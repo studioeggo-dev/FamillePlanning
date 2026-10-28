@@ -118,17 +118,11 @@ fun AppNavHost(
                     uiState = authState,
                     onSignInWithGoogleClick = onTriggerGoogleSignIn,
                     onContinueToAppClick = {
-                        val destination = when {
-                            authenticated == null -> {
-                                planningViewModel.setActiveFamily("local_demo")
-                                familyViewModel.loadDemoFamily()
-                                Screen.Planning
+                        val destination = if (activeFamilyId.isNullOrBlank()) Screen.FamilySetup else Screen.Planning
+                        if (authenticated != null) {
+                            navController.navigate(destination.route) {
+                                popUpTo(Screen.Welcome.route) { inclusive = true }
                             }
-                            activeFamilyId.isNullOrBlank() -> Screen.FamilySetup
-                            else -> Screen.Planning
-                        }
-                        navController.navigate(destination.route) {
-                            popUpTo(Screen.Welcome.route) { inclusive = true }
                         }
                     },
                     onDismissError = { authViewModel.dismissError() }
@@ -143,11 +137,6 @@ fun AppNavHost(
                         authViewModel.createFamily(name, firstName, color)
                     },
                     onRefreshProfile = { authViewModel.refreshProfile() },
-                    onExploreDemo = {
-                        planningViewModel.setActiveFamily("local_demo")
-                        familyViewModel.loadDemoFamily()
-                        navController.navigate(Screen.Planning.route)
-                    },
                     onSignOut = {
                         planningViewModel.stopSync()
                         authViewModel.signOut()

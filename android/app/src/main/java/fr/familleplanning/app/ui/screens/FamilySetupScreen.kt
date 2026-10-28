@@ -50,7 +50,6 @@ fun FamilySetupScreen(
     creationState: FamilyCreationState,
     onCreateFamily: (String, String, String) -> Unit,
     onRefreshProfile: () -> Unit,
-    onExploreDemo: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -144,9 +143,6 @@ fun FamilySetupScreen(
             )
             OutlinedButton(onClick = onRefreshProfile, enabled = !saving) {
                 Text("Retrouver ma famille")
-            }
-            OutlinedButton(onClick = onExploreDemo, enabled = !saving) {
-                Text("Explorer la démonstration")
             }
             OutlinedButton(onClick = onSignOut, enabled = !saving) {
                 Text("Changer de compte Google")
