@@ -45,15 +45,18 @@ fun AppNavHost(
     val familyState by familyViewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val familyCreationState by authViewModel.familyCreationState.collectAsState()
+    val familyOperationBusy by familyViewModel.operationBusy.collectAsState()
+    val familyOperationMessage by familyViewModel.operationMessage.collectAsState()
+    val inviteToken by familyViewModel.inviteToken.collectAsState()
 
     val authenticated = authState as? AuthUiState.Authenticated
     val activeFamilyId = authenticated?.profile?.activeFamilyId
 
-    // Aucune démo implicite : on ne charge des données fictives qu'après choix explicite.
+    // Aucune donnée fictive : synchronisation exclusivement sur un vrai foyer Firebase.
     LaunchedEffect(authenticated?.firebaseUser?.uid, activeFamilyId) {
         if (authenticated != null) {
             planningViewModel.setActiveFamily(activeFamilyId)
-            familyViewModel.loadFamilyData(activeFamilyId)
+            familyViewModel.loadFamilyData(activeFamilyId, authenticated.firebaseUser.uid)
         } else {
             planningViewModel.stopSync()
             familyViewModel.loadFamilyData(null)
@@ -169,9 +172,15 @@ fun AppNavHost(
             composable(Screen.Family.route) {
                 FamilyScreen(
                     uiState = familyState,
-                    onRefreshClick = {
-                        familyViewModel.loadFamilyData(activeFamilyId)
-                    }
+                    operationBusy = familyOperationBusy,
+                    operationMessage = familyOperationMessage,
+                    inviteToken = inviteToken,
+                    onRefreshClick = { familyViewModel.refresh() },
+                    onAddChild = { firstName, birthDate, color ->
+                        familyViewModel.addChild(firstName, birthDate, color)
+                    },
+                    onCreateInvite = { role, email -> familyViewModel.createInvite(role, email) },
+                    onDismissInvite = { familyViewModel.clearInvite() }
                 )
             }
 
