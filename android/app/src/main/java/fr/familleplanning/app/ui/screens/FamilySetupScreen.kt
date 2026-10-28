@@ -136,7 +136,7 @@ fun FamilySetupScreen(
                 else Text("Créer ma famille")
             }
             Text(
-                text = "Vous aviez déjà une famille sur le Web ? Utilisez le même compte Google puis actualisez.",
+                text = "Si vous avez déjà une famille, utilisez le même compte Google et appuyez sur « Retrouver ma famille ».",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
                 color = TextSecondary

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestoreException
 import fr.familleplanning.app.data.models.User
 import fr.familleplanning.app.data.repository.AuthRepository
 import fr.familleplanning.app.data.repository.FamilyRepository
@@ -123,7 +124,12 @@ class AuthViewModel(
                 _familyCreationState.value = FamilyCreationState.Idle
             }.onFailure { e ->
                 _familyCreationState.value = FamilyCreationState.Error(
-                    "Impossible de créer ce foyer : ${e.localizedMessage ?: "accès refusé"}. Aucune famille de démonstration n'a été créée."
+                    if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        "La connexion Google est active, mais Firestore refuse la création du foyer. " +
+                        "Les règles d'accès à la base familiale doivent être vérifiées. Aucune donnée n'a été enregistrée."
+                    } else {
+                        "Impossible de créer la famille : ${e.localizedMessage ?: "réessayez"}."
+                    }
                 )
             }
         }

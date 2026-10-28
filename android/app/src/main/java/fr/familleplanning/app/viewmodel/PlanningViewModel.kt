@@ -75,7 +75,6 @@ class PlanningViewModel(
         val weekDays = DateTimeUtils.getDaysOfWeek(date)
 
         val currentEvents = when (syncState) {
-            is EventsSyncState.DemoMode -> syncState.events
             is EventsSyncState.RealTimeSuccess -> syncState.events
             else -> emptyList()
         }

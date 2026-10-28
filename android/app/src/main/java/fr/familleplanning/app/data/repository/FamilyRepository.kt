@@ -1,6 +1,7 @@
 package fr.familleplanning.app.data.repository
 
 import com.google.firebase.auth.FirebaseUser
+import android.util.Log
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -94,6 +95,7 @@ class FamilyRepository(
             batch.commit().await()
             Result.success(familyId)
         } catch (e: Exception) {
+            Log.e("FamilyRepository", "Création du foyer refusée (vérifier les règles Firestore de la base nommée)", e)
             Result.failure(e)
         }
     }

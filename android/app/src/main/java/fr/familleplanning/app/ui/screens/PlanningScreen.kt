@@ -252,12 +252,6 @@ private fun SyncStateBadge(syncState: EventsSyncState) {
             "Synchronisé en temps réel avec Cloud Firestore Web & Android",
             MintAccent
         )
-        is EventsSyncState.DemoMode -> Quadruple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            Icons.Rounded.Info,
-            "Mode Démonstration Local — Connectez-vous pour la synchronisation distante",
-            TextSecondary
-        )
         is EventsSyncState.Loading -> Quadruple(
             CoralPrimary.copy(alpha = 0.12f),
             Icons.Rounded.Sync,
