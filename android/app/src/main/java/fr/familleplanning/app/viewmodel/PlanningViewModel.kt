@@ -82,17 +82,14 @@ class PlanningViewModel(
         val filtered = currentEvents.filter { event ->
             val matchParticipant = participantId == null || event.participantIds.contains(participantId)
 
-            // Filtrage par couverture de la journée (multi-jours et événements réguliers)
-            val matchTime = when (mode) {
-                PlanningViewMode.WEEK -> weekDays.any { day ->
-                    DateTimeUtils.isSpanningDay(event.startInstant, event.endInstant, day)
-                }
-                PlanningViewMode.MONTH -> {
-                    val startZdt = DateTimeUtils.toParisDateTime(event.startInstant)
-                    startZdt.year == date.year && startZdt.month == date.month
-                }
-            }
-            matchParticipant && matchTime
+            // La vue semaine/mois définit seulement les jours navigables.
+            // La liste doit correspondre au JOUR sélectionné (pas à toute la
+            // semaine / au mois) ; un événement multi-jours figure sur chaque
+            // journée qu'il couvre réellement en heure de Paris.
+            val matchSelectedDay = DateTimeUtils.isSpanningDay(
+                event.startInstant, event.endInstant, date
+            )
+            matchParticipant && matchSelectedDay
         }
 
         PlanningUiState(

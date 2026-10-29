@@ -91,10 +91,36 @@ export function parseCalendarEventMap(id: string, map: Record<string, any>): Pur
 /**
  * Calcule si un événement s'étale sur la journée spécifiée (ISO Date YYYY-MM-DD).
  */
+/**
+ * Date civile au fuseau Europe/Paris pour un instant donné.
+ * Ne JAMAIS utiliser toISOString().slice(0,10) pour le calendrier familial :
+ * cette expression donne la date UTC, décalée près de minuit en France.
+ */
+export function dayInParis(instant: Date): string {
+  if (Number.isNaN(instant.getTime())) throw new RangeError('Date invalide');
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const parts = formatter.formatToParts(instant);
+  const get = (type: string) => parts.find(part => part.type === type)?.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/**
+ * L'événement est visible uniquement si [start, end) intersecte le jour
+ * calendaire choisi à Paris. La fin est exclusive : un rendez-vous terminé
+ * exactement à minuit ne s'affiche pas le lendemain.
+ * Les journées de changement d'heure (23h / 25h) restent correctes.
+ */
 export function isEventSpanningDay(startIso: string, endIso: string, dayIso: string): boolean {
-  const eventStartDay = startIso.slice(0, 10);
-  const eventEndDay = endIso.slice(0, 10);
-  return dayIso >= eventStartDay && dayIso <= eventEndDay;
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dayIso)) return false;
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  const startDay = dayInParis(start);
+  if (end.getTime() <= start.getTime()) return dayIso === startDay;
+  const lastIncludedDay = dayInParis(new Date(end.getTime() - 1));
+  return dayIso >= startDay && dayIso <= lastIncludedDay;
 }
 
 /**

@@ -96,12 +96,15 @@ object DateTimeUtils {
      * couvre tout ou partie de la journée spécifiée à l'heure de Paris.
      */
     fun isSpanningDay(startInstant: Instant, endInstant: Instant, day: LocalDate): Boolean {
-        val startZdt = toParisDateTime(startInstant)
-        val endZdt = toParisDateTime(endInstant)
-        
         val dayStart = day.atStartOfDay(ZONE_PARIS).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZONE_PARIS).toInstant()
 
-        return !startInstant.isAfter(dayEnd) && !endInstant.isBefore(dayStart)
+        // Intervalle [début, fin) : un rendez-vous se terminant à 00:00 ne
+        // doit pas être répété sur le jour suivant. Un événement ponctuel
+        // sans durée reste visible sur sa date de début.
+        if (!endInstant.isAfter(startInstant)) {
+            return !startInstant.isBefore(dayStart) && startInstant.isBefore(dayEnd)
+        }
+        return startInstant.isBefore(dayEnd) && endInstant.isAfter(dayStart)
     }
 }

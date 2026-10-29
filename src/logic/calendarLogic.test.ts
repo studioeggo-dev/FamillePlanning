@@ -6,6 +6,7 @@ import {
   parseCalendarEventMap,
   checkAccessRole,
   isEventSpanningDay,
+  dayInParis,
   getMondayOfWeek,
   getWeekDays,
   filterEvents,
@@ -113,4 +114,37 @@ test('validateDatabaseId rejects default and accepts named Firestore database', 
     validateDatabaseId('ai-studio-familleplanning-5bf1e4ae-719b-4752-9367-6a8444b48be1'),
     true
   );
+});
+
+test('two appointments on two different days never appear together for a selected day', () => {
+  const thursday = { id: 'thu', start: '2026-10-29T14:00:00.000Z', end: '2026-10-29T15:00:00.000Z' };
+  const friday = { id: 'fri', start: '2026-10-30T14:00:00.000Z', end: '2026-10-30T15:00:00.000Z' };
+  const appointments = [thursday, friday];
+  const matches = (day: string) =>
+    appointments.filter(e => isEventSpanningDay(e.start, e.end, day)).map(e => e.id);
+  assert.deepEqual(matches('2026-10-29'), ['thu']);
+  assert.deepEqual(matches('2026-10-30'), ['fri']);
+  assert.deepEqual(matches('2026-10-31'), []);
+});
+
+test('Paris day comparison respects local midnight and daylight saving transitions', () => {
+  // 23:30 UTC on 29 October is 00:30 on 30 October in Paris.
+  assert.equal(dayInParis(new Date('2026-10-29T23:30:00.000Z')), '2026-10-30');
+  assert.equal(isEventSpanningDay('2026-10-29T23:30:00Z', '2026-10-30T00:30:00Z', '2026-10-29'), false);
+  assert.equal(isEventSpanningDay('2026-10-29T23:30:00Z', '2026-10-30T00:30:00Z', '2026-10-30'), true);
+  // Paris switches to winter time on 25 October 2026. Both instants are on 25 October locally.
+  assert.equal(isEventSpanningDay('2026-10-25T00:30:00Z', '2026-10-25T02:30:00Z', '2026-10-25'), true);
+  assert.equal(isEventSpanningDay('2026-10-25T00:30:00Z', '2026-10-25T02:30:00Z', '2026-10-26'), false);
+});
+
+test('end at midnight is exclusive and a truly multi-day event remains visible on its covered days', () => {
+  const start = '2026-10-29T20:00:00Z'; // 21:00 Paris
+  const midnight = '2026-10-29T23:00:00Z'; // 00:00 Paris 30 October
+  assert.equal(isEventSpanningDay(start, midnight, '2026-10-29'), true);
+  assert.equal(isEventSpanningDay(start, midnight, '2026-10-30'), false);
+  const multiEnd = '2026-10-31T08:00:00Z';
+  assert.equal(isEventSpanningDay(start, multiEnd, '2026-10-29'), true);
+  assert.equal(isEventSpanningDay(start, multiEnd, '2026-10-30'), true);
+  assert.equal(isEventSpanningDay(start, multiEnd, '2026-10-31'), true);
+  assert.equal(isEventSpanningDay(start, multiEnd, '2026-11-01'), false);
 });

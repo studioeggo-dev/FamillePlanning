@@ -17,7 +17,7 @@ import {
   friendlyError, type Family, type Member, type Event
 } from "./familyService";
 import {
-  getWeekDays, getMonthGrid, navigateDate, todayInParis, isEventSpanningDay
+  getWeekDays, getMonthGrid, navigateDate, todayInParis, dayInParis, isEventSpanningDay
 } from "./logic/calendarLogic";
 import type { Unsubscribe } from "firebase/firestore";
 
@@ -255,7 +255,7 @@ export default function App() {
         // Filtre de la journée sélectionnée
         return isEventSpanningDay(e.startAt.toISOString(), e.endAt.toISOString(), selectedDate);
       })
-      .sort((a, b) => a.startAt.getTime() - b.endAt.getTime());
+      .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
   }, [events, selectedDate, selectedParticipantId]);
 
   // Jours de la semaine courante
@@ -268,22 +268,22 @@ export default function App() {
     return getMonthGrid(selectedDate);
   }, [selectedDate]);
 
-  // Dictionnaire des événements par jour pour afficher les pastilles dans la grille mois
+  // Les pastilles sont calculées par jour *à Paris*, y compris les rendez-vous
+  // couvrant plusieurs jours. Elles utilisent la même règle que la liste du jour.
   const eventsByDay = useMemo(() => {
     const map = new Map<string, string[]>();
-    events.forEach(e => {
-      if (selectedParticipantId && !e.participantIds.includes(selectedParticipantId)) {
-        return;
+    const gridDays = new Set([...getWeekDays(selectedDate), ...getMonthGrid(selectedDate).map(cell => cell.dateIso)]);
+    for (const event of events) {
+      if (selectedParticipantId && !event.participantIds.includes(selectedParticipantId)) continue;
+      for (const dayIso of gridDays) {
+        if (!isEventSpanningDay(event.startAt.toISOString(), event.endAt.toISOString(), dayIso)) continue;
+        const colors = map.get(dayIso) || [];
+        if (!colors.includes(event.color)) colors.push(event.color);
+        map.set(dayIso, colors);
       }
-      const dayIso = e.startAt.toISOString().slice(0, 10);
-      const existing = map.get(dayIso) || [];
-      if (!existing.includes(e.color)) {
-        existing.push(e.color);
-      }
-      map.set(dayIso, existing);
-    });
+    }
     return map;
-  }, [events, selectedParticipantId]);
+  }, [events, selectedParticipantId, selectedDate]);
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
@@ -398,12 +398,13 @@ export default function App() {
     setEditingEvent(event);
     setEventTitle(event.title);
     setEventDescription(event.description || "");
-    const datePart = event.startAt.toISOString().slice(0, 10);
+    const datePart = dayInParis(event.startAt);
     setEventDate(datePart);
-    const sH = String(event.startAt.getHours()).padStart(2, "0");
-    const sM = String(event.startAt.getMinutes()).padStart(2, "0");
-    const eH = String(event.endAt.getHours()).padStart(2, "0");
-    const eM = String(event.endAt.getMinutes()).padStart(2, "0");
+    const parisTime = (date: Date) => new Intl.DateTimeFormat("fr-FR", {
+      timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).format(date);
+    const [sH, sM] = parisTime(event.startAt).split(":");
+    const [eH, eM] = parisTime(event.endAt).split(":");
     setEventStart(`${sH}:${sM}`);
     setEventEnd(`${eH}:${eM}`);
     setEventIsAllDay(event.isAllDay);
