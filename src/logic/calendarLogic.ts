@@ -113,7 +113,7 @@ export function dayInParis(instant: Date): string {
  * Les journées de changement d'heure (23h / 25h) restent correctes.
  */
 export function isEventSpanningDay(startIso: string, endIso: string, dayIso: string): boolean {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dayIso)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayIso)) return false;
   const start = new Date(startIso);
   const end = new Date(endIso);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
