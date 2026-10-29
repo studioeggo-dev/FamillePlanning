@@ -47,9 +47,18 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+          import shutil
           file = Path("android/app/google-services.json")
+          backup = Path(".github/familleplanning-android-firebase-config.json")
           if not file.exists():
-              raise RuntimeError("Missing android/app/google-services.json")
+              if not backup.exists():
+                  raise RuntimeError("Firebase Android config is missing from both app and verified backup")
+              backup_cfg = json.loads(backup.read_text())
+              if backup_cfg.get("project_info", {}).get("project_number") != "583230474913":
+                  raise RuntimeError("Untrusted backup: Firebase Android project number mismatch")
+              file.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(backup, file)
+              print("Firebase Android config restored from verified GitHub backup")
           cfg = json.loads(file.read_text())
           assert cfg["project_info"]["project_id"] == "gen-lang-client-0548701351", "Wrong Firebase project"
           assert cfg["project_info"]["project_number"] == "583230474913", "Wrong Firebase project number"
