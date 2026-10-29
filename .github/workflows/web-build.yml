@@ -36,5 +36,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Validate TypeScript
         run: npm run lint
+      - name: Run calendar unit tests
+        run: npm run test:calendar
       - name: Build production bundle
         run: npm run build

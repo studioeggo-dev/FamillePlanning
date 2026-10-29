@@ -4,5 +4,16 @@
       "source": "functions",
       "codebase": "familleplanning-family"
     }
-  ]
+  ],
+  "firestore": [
+    {
+      "database": "ai-studio-familleplanning-5bf1e4ae-719b-4752-9367-6a8444b48be1",
+      "rules": "firestore.rules"
+    }
+  ],
+  "emulators": {
+    "firestore": {
+      "port": 8085
+    }
+  }
 }
