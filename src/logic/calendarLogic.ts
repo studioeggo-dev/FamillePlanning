@@ -147,6 +147,82 @@ export function filterEvents(
   });
 }
 
+export interface MonthDayCell {
+  dateIso: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+}
+
+/**
+ * Calcule la grille de 35 ou 42 jours pour la vue mois (lundi à dimanche).
+ */
+export function getMonthGrid(referenceDate: string): MonthDayCell[] {
+  const [y, m] = referenceDate.split('-').map(Number);
+  const firstOfMonth = new Date(Date.UTC(y, m - 1, 1));
+  const dayOfWeek = firstOfMonth.getUTCDay();
+  const offsetToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const lastOfMonth = new Date(Date.UTC(y, m, 0));
+  const totalDaysInMonth = lastOfMonth.getUTCDate();
+
+  const grid: MonthDayCell[] = [];
+
+  const prevMonthLast = new Date(Date.UTC(y, m - 1, 0));
+  const prevMonthDays = prevMonthLast.getUTCDate();
+  for (let i = offsetToMonday - 1; i >= 0; i--) {
+    const dayNum = prevMonthDays - i;
+    const d = new Date(Date.UTC(y, m - 2, dayNum));
+    grid.push({
+      dateIso: d.toISOString().split('T')[0],
+      dayNumber: dayNum,
+      isCurrentMonth: false
+    });
+  }
+
+  for (let dayNum = 1; dayNum <= totalDaysInMonth; dayNum++) {
+    const d = new Date(Date.UTC(y, m - 1, dayNum));
+    grid.push({
+      dateIso: d.toISOString().split('T')[0],
+      dayNumber: dayNum,
+      isCurrentMonth: true
+    });
+  }
+
+  const remaining = (7 - (grid.length % 7)) % 7;
+  for (let dayNum = 1; dayNum <= remaining; dayNum++) {
+    const d = new Date(Date.UTC(y, m, dayNum));
+    grid.push({
+      dateIso: d.toISOString().split('T')[0],
+      dayNumber: dayNum,
+      isCurrentMonth: false
+    });
+  }
+
+  return grid;
+}
+
+/**
+ * Navigation temporelle selon le mode Semaine (+- 7 jours) ou Mois (+- 1 mois).
+ */
+export function navigateDate(currentIso: string, mode: 'week' | 'month', delta: number): string {
+  const [y, m, d] = currentIso.split('-').map(Number);
+  if (mode === 'week') {
+    const date = new Date(Date.UTC(y, m - 1, d + delta * 7));
+    return date.toISOString().split('T')[0];
+  } else {
+    // En vue mois, on avance/recule de 1 mois en gardant le 1er du mois ou le jour
+    const date = new Date(Date.UTC(y, m - 1 + delta, Math.min(d, 28)));
+    return date.toISOString().split('T')[0];
+  }
+}
+
+/**
+ * Retourne la date courante (YYYY-MM-DD) dans le fuseau Europe/Paris.
+ */
+export function todayInParis(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+}
+
 /**
  * Valide que la configuration Firestore cible exactement la base nommée
  */

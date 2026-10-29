@@ -10,8 +10,42 @@ import {
   getWeekDays,
   filterEvents,
   validateDatabaseId,
+  getMonthGrid,
+  navigateDate,
+  todayInParis,
   type PureCalendarEvent
 } from './calendarLogic';
+
+test('getMonthGrid returns a valid 35 or 42 cell grid covering the month with mondays as first col', () => {
+  const grid = getMonthGrid('2026-10-15');
+  assert.equal(grid.length % 7, 0);
+  assert.ok(grid.length === 35 || grid.length === 42);
+
+  // Check Oct 1st is present and marked as current month
+  const octFirst = grid.find(c => c.dateIso === '2026-10-01');
+  assert.ok(octFirst);
+  assert.equal(octFirst.isCurrentMonth, true);
+
+  // Check Sep 30 is present as previous month
+  const sepLast = grid.find(c => c.dateIso === '2026-09-30');
+  assert.ok(sepLast);
+  assert.equal(sepLast.isCurrentMonth, false);
+});
+
+test('navigateDate handles week and month increments and decrements', () => {
+  // Week
+  assert.equal(navigateDate('2026-10-15', 'week', 1), '2026-10-22');
+  assert.equal(navigateDate('2026-10-15', 'week', -1), '2026-10-08');
+
+  // Month
+  assert.equal(navigateDate('2026-10-15', 'month', 1), '2026-11-15');
+  assert.equal(navigateDate('2026-10-15', 'month', -1), '2026-09-15');
+});
+
+test('todayInParis returns ISO format date YYYY-MM-DD', () => {
+  const today = todayInParis();
+  assert.match(today, /^\d{4}-\d{2}-\d{2}$/);
+});
 
 test('parseUserMap handles both activeFamilyId and currentFamilyId alias', () => {
   const user1 = parseUserMap('u1', { email: 'test@example.com', currentFamilyId: 'fam_123' });

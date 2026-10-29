@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document storing family membership and personal info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "currentFamilyId": { "type": "string" },
+        "familyIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Family household entity",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "ownerId": { "type": "string" },
+        "timezone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "FamilyAccess": {
+      "title": "FamilyAccess",
+      "description": "Role-based access document linking an authenticated user to a family",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["owner", "admin", "member", "viewer"] },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["role"]
+    },
+    "FamilyMember": {
+      "title": "FamilyMember",
+      "description": "Profile of a family member displayed on calendar chips",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "userId": { "type": "string" },
+        "role": { "type": "string" },
+        "roleLabel": { "type": "string" },
+        "color": { "type": "string" },
+        "avatarEmoji": { "type": "string" },
+        "isChild": { "type": "boolean" },
+        "birthDate": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "Shared calendar event within a family",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string" },
+        "startAt": { "type": "string", "format": "date-time" },
+        "endAt": { "type": "string", "format": "date-time" },
+        "allDay": { "type": "boolean" },
+        "participantIds": { "type": "array" },
+        "category": { "type": "string" },
+        "color": { "type": "string" },
+        "location": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "startAt", "endAt"]
+    },
+    "FamilyMemoryEntry": {
+      "title": "FamilyMemoryEntry",
+      "description": "Memory or pending note for the family",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "source": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles with family references"
+    },
+    "/families/{familyId}": {
+      "schema": { "$ref": "#/entities/Family" },
+      "description": "Family household entities"
+    },
+    "/families/{familyId}/access/{userId}": {
+      "schema": { "$ref": "#/entities/FamilyAccess" },
+      "description": "Access roles per user in a family"
+    },
+    "/families/{familyId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/FamilyMember" },
+      "description": "Household members displayed in calendar"
+    },
+    "/families/{familyId}/events/{eventId}": {
+      "schema": { "$ref": "#/entities/CalendarEvent" },
+      "description": "Calendar events for a family"
+    },
+    "/families/{familyId}/memory/{memoryId}": {
+      "schema": { "$ref": "#/entities/FamilyMemoryEntry" },
+      "description": "Family notes and memory"
+    }
+  }
+}

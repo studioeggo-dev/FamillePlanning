@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, getDocs, setDoc, writeBatch, onSnapshot,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, onSnapshot,
   serverTimestamp, Timestamp, arrayUnion, type Unsubscribe
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -24,12 +24,18 @@ export interface Member {
 }
 export interface Event {
   id: string;
+  familyId?: string;
   title: string;
+  description: string;
   startAt: Date;
   endAt: Date;
+  isAllDay: boolean;
   participantIds: string[];
   location: string;
   category: string;
+  color: string;
+  createdBy?: string;
+  createdAt?: Date;
 }
 export interface AppProfile {
   currentFamilyId: string | null;
@@ -128,32 +134,74 @@ export function observeMembers(familyId:string,cb:(members:Member[])=>void,onErr
     cb(members);
   },error=>onError(error));
 }
+function parseDate(val: unknown): Date | null {
+  if (!val) return null;
+  if (typeof (val as Timestamp).toDate === "function") return (val as Timestamp).toDate();
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 export function observeEvents(familyId:string,cb:(events:Event[])=>void,onError:(error:Error)=>void):Unsubscribe {
   return onSnapshot(collection(database(),"families",familyId,"events"),snapshot=>{
     cb(snapshot.docs.flatMap(s=>{
       const d=s.data();
-      const start = (d.startAt || d.startInstant) as Timestamp | undefined;
-      const end = (d.endAt || d.endInstant) as Timestamp | undefined;
-      if (!start?.toDate || !end?.toDate) return [];
+      const start = parseDate(d.startAt || d.startInstant || d.startDate || d.startTime);
+      const end = parseDate(d.endAt || d.endInstant || d.endDate || d.endTime) || start;
+      if (!start || !end) return [];
+      const participants = Array.isArray(d.participantIds) ? d.participantIds :
+        Array.isArray(d.participants) ? d.participants : [];
+      const color = String(d.color || d.colorHex || "#FF6B6B");
+      const isAllDay = d.allDay === true || d.isAllDay === true;
+      const createdAt = parseDate(d.createdAt) || undefined;
       return [{
-        id:s.id, title:String(d.title||""), startAt:start.toDate(), endAt:end.toDate(),
-        participantIds:Array.isArray(d.participantIds)?d.participantIds:[],
-        location:String(d.location||""),category:String(d.category||"general")
+        id:s.id, familyId, title:String(d.title||d.name||""),
+        description:String(d.description||""), startAt:start, endAt:end,
+        isAllDay, participantIds:participants, location:String(d.location||""),
+        category:String(d.category||"general"), color,
+        createdBy:typeof d.createdBy==="string"?d.createdBy:undefined, createdAt
       }];
     }));
   },error=>onError(error));
 }
+
 export async function addEvent(familyId:string,uid:string,data:{
-  title:string,startAt:Date,endAt:Date,participantIds:string[],location:string
-}) {
-  if (data.endAt<=data.startAt || !data.title.trim()) throw new Error("Vérifiez le titre et les horaires.");
+  title:string; description?:string; startAt:Date; endAt:Date;
+  isAllDay:boolean; participantIds:string[]; category:string; color:string; location?:string;
+}):Promise<string> {
+  if (data.endAt < data.startAt || !data.title.trim()) throw new Error("Vérifiez le titre et les horaires du rendez-vous.");
   const ref=doc(collection(database(),"families",familyId,"events"));
   await setDoc(ref,{
-    familyId,title:data.title.trim(),description:"",
-    startAt:Timestamp.fromDate(data.startAt),endAt:Timestamp.fromDate(data.endAt),
-    allDay:false,participantIds:data.participantIds,category:"general",
-    color:"#FF6B6B",location:data.location.trim(),createdBy:uid,createdAt:serverTimestamp()
+    familyId, title:data.title.trim(), description:data.description?.trim()||"",
+    startAt:Timestamp.fromDate(data.startAt), endAt:Timestamp.fromDate(data.endAt),
+    allDay:Boolean(data.isAllDay), participantIds:data.participantIds,
+    category:data.category||"general", color:data.color||"#FF6B6B",
+    location:data.location?.trim()||"", createdBy:uid, createdAt:serverTimestamp()
   });
+  return ref.id;
+}
+
+export async function updateEvent(familyId:string,eventId:string,data:{
+  title:string; description?:string; startAt:Date; endAt:Date;
+  isAllDay:boolean; participantIds:string[]; category:string; color:string; location?:string;
+}):Promise<void> {
+  if (data.endAt < data.startAt || !data.title.trim()) throw new Error("Vérifiez le titre et les horaires du rendez-vous.");
+  const ref=doc(database(),"families",familyId,"events",eventId);
+  await updateDoc(ref,{
+    title:data.title.trim(), description:data.description?.trim()||"",
+    startAt:Timestamp.fromDate(data.startAt), endAt:Timestamp.fromDate(data.endAt),
+    allDay:Boolean(data.isAllDay), participantIds:data.participantIds,
+    category:data.category||"general", color:data.color||"#FF6B6B",
+    location:data.location?.trim()||""
+  });
+}
+
+export async function deleteEvent(familyId:string,eventId:string):Promise<void> {
+  const ref=doc(database(),"families",familyId,"events",eventId);
+  await deleteDoc(ref);
 }
 async function invoke<P,R>(name:string, payload:P):Promise<R> {
   const run=httpsCallable<P,R>(functions(),name);
