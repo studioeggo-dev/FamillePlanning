@@ -5,7 +5,7 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, Timestamp, FieldValue} = require("firebase-admin/firestore");
 const {
   createToken, tokenHash, requiredName, validColor, normalizeEmail,
-  validBirthDate, isHolder, isFullHolderGroup
+  validBirthDate, isHolder, isFullHolderGroup, normalizeInviteRole
 } = require("./inviteCore");
 
 const PROJECT_ID = "gen-lang-client-0548701351";
@@ -51,16 +51,15 @@ const apiError = (error) => {
   throw new HttpsError("internal", "Action indisponible. Réessaie plus tard.");
 };
 
-// Les 2 parents titulaires maximum : propriétaire initial + un parent invité.
-// Un adulte invité (role adult) est membre du foyer, sans droits parentaux.
+// Invitation de participants connectés, sans condition de lien familial ou de majorité.
+// Le rôle parent reste accepté pour les anciennes invitations, sans être l'option
+// standard : il est distinct du profil affiché (enfant, ado, proche, colocataire).
+// Un participant peut contribuer aux événements mais n'administre pas le foyer.
 exports.createFamilyInvite = onCall(options, async (request) => {
   try {
     const uid = signedIn(request);
     const familyId = safeFamilyId(request.data?.familyId);
-    const role = request.data?.role;
-    if (role !== "parent" && role !== "adult") {
-      throw new HttpsError("invalid-argument", "Type d'invitation invalide.");
-    }
+    const role = parse(() => normalizeInviteRole(request.data?.role));
     const email = parse(() => normalizeEmail(request.data?.email || null));
     await assertParent(familyId, uid);
     const token = createToken();
@@ -139,14 +138,18 @@ exports.acceptFamilyInvite = onCall(options, async (request) => {
       }
       const memberRef = membersRef.doc();
       const now = FieldValue.serverTimestamp();
+      // Les vieux liens role=adult restent acceptés, mais les nouveaux profils
+      // affichent un rôle neutre en âge et en relation familiale.
+      const memberRole = data.role === "adult" ? "participant" : data.role;
       // One document for the second-holder slot prevents concurrent invitations
       // from enrolling two second parents (transaction read/write conflict).
       if (data.role === "parent") {
         tx.create(secondSeat, {uid, createdAt:now});
       }
-      tx.create(membershipRef, {role: data.role, joinedAt: now, invitedBy: data.createdBy});
+      tx.create(membershipRef, {role: data.role === "adult" ? "participant" : data.role, joinedAt: now, invitedBy: data.createdBy});
       tx.create(memberRef, {
-        name, userId: uid, role: data.role, roleLabel: data.role === "parent" ? "Parent titulaire" : "Adulte",
+        name, userId: uid, role: memberRole,
+        roleLabel: memberRole === "parent" ? "Parent titulaire" : "Participant invité",
         color, avatarEmoji:"🙂", isChild:false, hasAccount:true, createdAt:now
       });
       tx.set(userRef, {

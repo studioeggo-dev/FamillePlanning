@@ -26,3 +26,13 @@ test("name, color and optional email are validated",()=>{
   assert.equal(c.normalizeEmail(" PERSON@EXAMPLE.ORG "),"person@example.org");
   assert.throws(()=>c.validColor("red"));
 });
+
+test("any invited participant can join without being a parent or an adult-only role", () => {
+  assert.equal(c.normalizeInviteRole("participant"), "participant");
+  assert.equal(c.normalizeInviteRole("adult"), "participant");
+  assert.equal(c.normalizeInviteRole("parent"), "parent");
+  assert.throws(() => c.normalizeInviteRole("owner"));
+  assert.throws(() => c.normalizeInviteRole("admin"));
+  assert.throws(() => c.normalizeInviteRole("child"));
+  assert.equal(c.isFullHolderGroup(["owner", "participant", "participant"]), false);
+});

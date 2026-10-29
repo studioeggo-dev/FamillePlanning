@@ -44,10 +44,20 @@ function validBirthDate(value) {
   }
   return value;
 }
+/**
+ * Les participants avec compte n'ont pas besoin d'être des adultes ni des parents.
+ * "adult" est uniquement un alias conservé pour les anciens clients et invitations.
+ * Le niveau d'accès est distinct du profil affiché dans le calendrier.
+ */
+function normalizeInviteRole(role) {
+  if (role === "participant" || role === "adult") return "participant";
+  if (role === "parent") return "parent"; // compatibilité des liens existants
+  throw new Error("invalid invite role");
+}
 const isHolder = (role) => role === "owner" || role === "admin" || role === "parent";
 const isFullHolderGroup = (roles) => roles.filter(isHolder).length >= 2;
 
 module.exports = {
   createToken, tokenHash, requiredName, validColor, normalizeEmail,
-  validBirthDate, isHolder, isFullHolderGroup
+  validBirthDate, isHolder, isFullHolderGroup, normalizeInviteRole
 };

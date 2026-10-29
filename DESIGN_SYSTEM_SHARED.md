@@ -36,9 +36,9 @@ Les couleurs de membres sont **librement choisies** et ne sont jamais associées
 1. **En-tête** : nom du foyer, date courante/choisie, action « Aujourd'hui » et navigation par dates.
 2. **Calendrier** : bascule « Semaine / Mois », sélection d'une journée, pastilles de participants, événements en cartes lisibles, bouton + corail pour créer un événement.
 3. **Navigation** : « Planning », « Ma famille », « Paramètres ». Navigation basse sur mobile Web comme sur Android. Desktop : menu latéral ou barre haute admis, mais mêmes sections et ordre.
-4. **Membres** : pastille colorée avec initiale, prénom, rôle, distinction « Enfant · sans compte », identique sur les deux clients.
-5. **Actions parentales** : « Ajouter un enfant », « Inviter un adulte », rôle « Parent titulaire » (maximum deux), « Adulte invité ». Aucun compte enfant de moins de 13 ans.
-6. **Invitation** : choix parent titulaire/adulte, adresse réservée facultative, lien privé à usage unique valable 48 heures, saisie manuelle du code, acceptation après authentification.
+4. **Membres** : pastille colorée avec initiale, prénom et distinction explicite « Avec compte » / « Sans compte ». Les événements référencent systématiquement `members/{memberId}` dans `participantIds`, jamais des e-mails ou des prénoms libres.
+5. **Gestion du foyer** : deux actions simples « Inviter un participant » (ado possédant un compte admissible, colocataire, grand-parent, proche…) et « Ajouter un enfant sans compte ». L'appartenance familiale n'est jamais requise pour participer au planning. Les profils d'enfants sont gérés par un organisateur habilité.
+6. **Invitation** : lien privé à usage unique valable 48 heures, option de réserver à une adresse e-mail, saisie manuelle du code et acceptation après authentification. Le rôle `participant` n'accorde pas d'administration. Le rôle historique `adult` est accepté pour compatibilité. Les fonctions Cloud restent à déployer avant de pouvoir activer le parcours complet. Le rôle parent spécifique peut être prévu en gestion avancée, pas lors de l'invitation standard.
 7. **États réels** : chargement, erreur Firebase explicite, calendrier vide et succès. **Interdit de remplacer silencieusement un échec par la famille Martin ou des rendez-vous d'exemple.**
 8. **Accessibilité** : surfaces tactiles >= 44 px, contraste suffisant, textes lisibles, étiquettes accessibles, réactivité téléphone/ordinateur, prise en compte navigation clavier.
 9. **Expérience commune** : connexion et création de foyer, gestion des enfants, création/édition d'événements, dates, participants, invitations, erreurs, synchronisation ; chaque parcours doit être équivalent côté Web et Android.
@@ -51,3 +51,5 @@ Les couleurs de membres sont **librement choisies** et ne sont jamais associées
 - Les changements Android sont proposés par ChatGPT puis compilés avec GitHub Actions ; leur équivalent Web fait l'objet d'un prompt AI Studio.
 - Vérifier `npm run lint` et `npm run build` avant Push Web, et Android build GitHub Actions avant APK.
 - Vérifier un événement réel et un membre réel en utilisant le même compte depuis les deux interfaces.
+- Les invitations créent des membres **avec compte**, les profils enfants des membres **sans compte**. Le fait d'être participant du planning n'accorde jamais un accès Firebase à lui seul.
+- La future extraction des rendez-vous à partir de messages, captures ou e-mails consulte une mémoire familiale structurée (prénoms/alias, activités, école, classe, liens utiles), propose des `participantIds`, et **demande toujours confirmation avant la création** ; aucune déduction de personne incertaine ne doit déclencher une écriture silencieuse.

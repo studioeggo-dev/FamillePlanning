@@ -75,12 +75,6 @@ fun FamilyScreen(
     val context = LocalContext.current
     val state = uiState as? FamilyUiState.Success
     val isParent = state?.accessRole in listOf("owner", "admin", "parent")
-    val parentCount = state?.members?.count {
-        it.role in listOf("owner","admin","parent") ||
-            (it.userId != null && it.roleName == "Parent titulaire")
-    } ?: 0
-    val canInviteSecondParent = parentCount < 2
-
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(modifier = Modifier.fillMaxWidth(), shadowElevation = 2.dp) {
@@ -129,21 +123,21 @@ fun FamilyScreen(
                                 onClick = { childDialog = true },
                                 enabled = !operationBusy,
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("＋ Ajouter un enfant") }
+                            ) { Text("＋ Ajouter un enfant sans compte") }
                             OutlinedButton(
                                 onClick = { inviteDialog = true },
                                 enabled = !operationBusy,
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Inviter un adulte par lien") }
+                            ) { Text("Inviter un participant par lien") }
                             Text(
-                                "Parents titulaires : ${parentCount.coerceAtLeast(1)}/2. " +
-                                    "Les enfants n'ont pas besoin de compte.",
+                                "Un participant rejoint avec son compte. " +
+                                    "Un enfant peut figurer au planning sans connexion.",
                                 color = TextSecondary,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
                     } else {
-                        Text("Les parents titulaires gèrent les profils enfants et les invitations.",
+                        Text("L'organisateur du foyer gère les profils sans compte et les invitations.",
                             modifier = Modifier.padding(16.dp), color = TextSecondary)
                     }
                     LazyColumn(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp),
@@ -184,30 +178,22 @@ fun FamilyScreen(
     }
 
     if (inviteDialog) {
-        var role by rememberSaveable { mutableStateOf("adult") }
         var email by rememberSaveable { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { if (!operationBusy) inviteDialog = false },
-            title = { Text("Inviter un adulte") },
+            title = { Text("Inviter un participant") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Lien privé à usage unique, valable 48 heures. Le destinataire doit se connecter.")
-                    OutlinedButton(
-                        onClick = { role = "adult" },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (role == "adult") "✓ Adulte (sans administration)" else "Adulte (sans administration)") }
-                    OutlinedButton(
-                        onClick = { role = "parent" },
-                        enabled = canInviteSecondParent,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (role == "parent") "✓ Parent titulaire (2ᵉ)" else "Parent titulaire (2ᵉ)") }
+                    Text("Ado avec compte, colocataire, grand-parent, proche… Aucun lien parental requis.")
+                    Text("Le participant pourra consulter et organiser les événements, sans administrer le foyer.")
                     OutlinedTextField(value = email, onValueChange = { email = it.take(254) },
                         label = { Text("Adresse e-mail réservée · facultatif") }, singleLine = true)
                 }
             },
             confirmButton = { TextButton(
                 enabled = !operationBusy,
-                onClick = { onCreateInvite(role, email.ifBlank { null }); inviteDialog = false }
+                onClick = { onCreateInvite("participant", email.ifBlank { null }); inviteDialog = false }
             ) { Text("Créer le lien") } },
             dismissButton = { TextButton(onClick = { inviteDialog = false }) { Text("Annuler") } }
         )
@@ -220,7 +206,7 @@ fun FamilyScreen(
             title = { Text("Invitation créée") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Partagez ce lien avec un adulte. S'il ne s'ouvre pas directement, il peut copier le code dans « Rejoindre une famille ».")
+                    Text("Partagez ce lien avec la personne invitée. Elle devra se connecter avec son propre compte. Si le lien ne s'ouvre pas, elle peut saisir le code dans « Rejoindre une famille ».")
                     Text(deepLink, style = MaterialTheme.typography.bodySmall)
                     Text("Code d'invitation : ${inviteToken}", style = MaterialTheme.typography.bodySmall)
                     Text("À usage unique · expiration après 48 heures.", color = TextSecondary)
@@ -280,7 +266,7 @@ private fun FamilyMemberCard(member: FamilyMember) {
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(member.firstName, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(member.roleName ?: if (member.isChild) "Enfant" else "Adulte",
+                Text(member.roleName ?: if (member.isChild) "Enfant" else "Participant",
                     color = color, fontSize = 13.sp)
                 if (member.isChild) {
                     Text("Profil sans connexion", color = TextSecondary, fontSize = 11.sp)
